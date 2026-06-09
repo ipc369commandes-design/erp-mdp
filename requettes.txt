@@ -49,7 +49,7 @@ git commit --amend --no-edit
 git push -u origin main
 
 git add votre_fichier_base.db
-git commit -m "Ajout de la base de données synchronisée"
+git commit -m "Repare pdf liste scolaire"
 git push origin main
 
 
