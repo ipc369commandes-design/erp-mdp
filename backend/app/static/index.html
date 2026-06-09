@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP MDP - Produits</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+<div class="erp-layout">
+
+    <!-- ================= SIDEBAR ================= -->
+    <aside class="sidebar">
+        <h2 class="logo">📦 ERP MDP</h2>
+
+        <nav id="sidebar-nav">
+            <!-- Nous utiliserons des attributs data-* pour gérer la navigation en JS -->
+            <button class="nav-btn active" data-target="products">
+                📦 Produits
+            </button>
+
+            <button class="nav-btn" data-target="lists">
+                📚 Listes scolaires
+            </button>
+
+            <button class="nav-btn" data-target="schools">
+                🏫 Écoles
+            </button>
+
+            <button class="nav-btn" data-target="years">
+                📅 Années scolaires
+            </button>
+        </nav>
+    </aside>
+
+    <!-- ================= CONTENT ================= -->
+    <main class="main-content">
+
+        <!-- ================= PAGE PRODUITS ================= -->
+        <section id="page-products" class="page active">
+
+            <header>
+                <h1>📦 ERP MDP - Catalogue de Produits</h1>
+
+                <div class="search-section">
+
+                    <!-- Recherche -->
+                    <div class="search-bar">
+                        <input 
+                            type="text" 
+                            id="searchInput" 
+                            placeholder="Rechercher par code ou titre..."
+                            class="search-input"
+                            aria-label="Rechercher un produit par code ou titre"
+                        >
+                        <button id="searchBtn" class="search-btn">🔍 Rechercher</button>
+                    </div>
+
+                    <!-- Admin -->
+                    <div class="admin-panel">
+
+                        <button id="viewListBtn" class="view-list-btn">
+                            📚 Ma Liste 
+                            <span id="cartBadge">0</span>
+                        </button>
+
+                        <button id="syncBtn" class="sync-btn">
+                            ⚙️ Lancer la synchronisation
+                        </button>
+
+                        <button
+                            id="stopSyncBtn"
+                            class="stop-sync-btn hidden">
+                            ⛔ Arrêter
+                        </button>
+
+                        <div id="syncProgress" class="sync-progress hidden">
+                            <div class="progress-bar">
+                                <div id="progressFill" class="progress-fill"></div>
+                            </div>
+                            <p id="syncMessage">Synchronisation en cours...</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ✅ AJOUT : Bouton d'activation des filtres -->
+                <div class="filters-toggle">
+                    <button id="toggleFilters" class="toggle-btn">⚙️ Filtres avancés</button>
+                </div>
+
+                <!-- ✅ AJOUT : Panneau des filtres avancés (masqué par défaut) -->
+                <div id="filtersPanel" class="filters-panel hidden">
+                    <div class="filter-group">
+                        <label for="minPrice">Prix minimum (FCFA)</label>
+                        <input type="number" id="minPrice" placeholder="Ex: 5000">
+                    </div>
+                    <div class="filter-group">
+                        <label for="maxPrice">Prix maximum (FCFA)</label>
+                        <input type="number" id="maxPrice" placeholder="Ex: 50000">
+                    </div>
+                    <div class="filter-group">
+                        <label for="disponibiliteFilter">Disponibilité</label>
+                        <select id="disponibiliteFilter">
+                            <option value="">Tous les produits</option>
+                            <option value="1">✅ Disponible</option>
+                            <option value="0">❌ Indisponible</option>
+                        </select>
+                    </div>
+                    <button id="applyFilters" class="apply-filters-btn">✔️ Appliquer</button>
+                    <button id="resetFilters" class="reset-filters-btn">🔄 Réinitialiser</button>
+                </div>
+
+            </header>
+
+            <!-- Remplacement de main par une div class="page-body" -->
+            <div class="page-body">
+
+                <div id="loading" class="loading">Chargement...</div>
+                <div id="error" class="error"></div>
+
+                <div id="statsBar" class="stats-bar">
+                    <span id="statsText"></span>
+                </div>
+
+                <div id="productsContainer" class="products-grid"></div>
+
+                <div id="pagination" class="pagination"></div>
+
+            </div>
+
+        </section>
+
+        <!-- ================= PAGE LISTES ================= -->
+        <section id="page-lists" class="page hidden">
+
+            <div class="page-header">
+                <h1>📚 Gestion des listes scolaires</h1>
+
+                <button id="createListBtn" class="btn btn-primary">
+                    ➕ Nouvelle liste
+                </button>
+            </div>
+
+            <div id="listsContainer"></div>
+
+        </section>
+
+        <!-- ================= PAGE ECOLES ================= -->
+        <section id="page-schools" class="page hidden">
+            <h1>🏫 Écoles</h1>
+            <div id="schoolsContainer"></div>
+        </section>
+
+        <!-- ================= PAGE YEARS ================= -->
+        <section id="page-years" class="page hidden">
+            <h1>📅 Années scolaires</h1>
+            <div id="yearsContainer"></div>
+        </section>
+
+    </main>
+</div>
+
+<!-- ================= MODAL SYNCHRONISATION ================= -->
+<div id="syncModal" class="sync-modal hidden">
+
+    <div class="sync-modal-content" id="syncModalContent">
+
+        <div class="sync-modal-header">
+            <h2>🔄 Synchronisation en cours</h2>
+            <div class="sync-modal-controls">
+                <button id="minimizeModal" class="modal-btn" title="Réduire">−</button>
+                <button id="closeModal" class="modal-btn" title="Fermer">✕</button>
+            </div>
+        </div>
+
+        <div class="sync-modal-content-body">
+            <div class="progress-bar">
+                <div id="modalProgressFill" class="progress-fill"></div>
+            </div>
+
+            <p id="modalSyncMessage">Démarrage...</p>
+
+            <div class="sync-stats">
+                <div>Total : <span id="syncTotal">0</span></div>
+                <div>Succès : <span id="syncSuccess">0</span></div>
+                <div>Erreurs : <span id="syncFailed">0</span></div>
+                <div>Restants : <span id="syncRemaining">0</span></div>
+            </div>
+
+            <div id="currentProduct">Article en cours : -</div>
+
+            <div id="syncLogs" class="sync-logs"></div>
+
+            <div class="sync-modal-actions">
+                <button id="stopSyncBtnModal" class="stop-sync-btn">
+                    ⛔ Arrêter la synchronisation
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Modales génériques -->
+<div id="modalsContainer"></div>
+
+<!-- Utilisation de type="module" pour permettre la modularité du JS -->
+<script type="module" src="/static/js/app.js"></script>
+
+</body>
+</html>

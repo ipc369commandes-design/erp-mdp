@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Liste scolaire valorisée</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    background:#eef2fb;
+    font-family:Arial, Helvetica, sans-serif;
+    padding:20px;
+}
+
+.page{
+    width:1200px;
+    margin:auto;
+    background:white;
+    border-radius:18px;
+    overflow:hidden;
+    box-shadow:0 10px 40px rgba(0,0,0,0.10);
+}
+
+/* =========================
+HEADER
+========================= */
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    padding:25px 35px;
+    border-bottom:6px solid #001a70;
+}
+
+.logo-zone{
+    display:flex;
+    gap:25px;
+    align-items:center;
+}
+
+.logo-zone img{
+    width:90px;
+}
+
+.logo-text h1{
+    font-size:58px;
+    line-height:58px;
+    color:#111;
+}
+
+.logo-text span{
+    color:#f2b300;
+}
+
+.logo-text p{
+    margin-top:10px;
+    color:#001a70;
+    font-style:italic;
+    font-size:24px;
+}
+
+.contact-zone{
+    display:flex;
+    gap:50px;
+    align-items:flex-start;
+}
+
+.contact-block{
+    font-size:22px;
+    line-height:40px;
+    color:#111;
+}
+
+.shop-box{
+    background:#001a70;
+    color:white;
+    padding:20px 35px;
+    border-radius:15px;
+    font-size:28px;
+    font-weight:bold;
+}
+
+/* =========================
+TOP BAR
+========================= */
+
+.top-bar{
+    background:#001a70;
+    color:white;
+    display:flex;
+    justify-content:space-around;
+    padding:20px;
+    font-size:24px;
+    font-weight:bold;
+}
+
+.top-bar div{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+/* =========================
+TITLE
+========================= */
+
+.title-section{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:35px;
+}
+
+.title-left{
+    display:flex;
+    align-items:center;
+    gap:30px;
+}
+
+.title-left img{
+    width:90px;
+}
+
+.main-title{
+    font-size:76px;
+    line-height:78px;
+    font-weight:bold;
+    color:#001a70;
+}
+
+.main-title span{
+    color:#f2b300;
+}
+
+.class-box{
+    background:#001a70;
+    color:white;
+    padding:30px;
+    border-radius:18px;
+    font-size:34px;
+    text-align:center;
+    font-weight:bold;
+    width:340px;
+}
+
+/* =========================
+CLIENT
+========================= */
+
+.client-box{
+    margin:0 30px 25px 30px;
+    border:2px solid #d8def0;
+    border-radius:18px;
+    padding:20px;
+}
+
+.client-title{
+    background:#001a70;
+    color:white;
+    display:inline-block;
+    padding:8px 20px;
+    border-radius:10px;
+    font-size:20px;
+    margin-bottom:15px;
+}
+
+.client-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+    font-size:20px;
+}
+
+/* =========================
+TABLE
+========================= */
+
+.table-wrapper{
+    padding:0 20px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+thead{
+    background:#001a70;
+    color:white;
+}
+
+th{
+    padding:18px;
+    font-size:18px;
+}
+
+td{
+    border-bottom:1px solid #e7e7e7;
+    padding:18px;
+    vertical-align:middle;
+    font-size:18px;
+}
+
+td.center{
+    text-align:center;
+}
+
+.line-number{
+    background:#f2b300;
+    color:#111;
+    width:45px;
+    height:45px;
+    border-radius:10px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-weight:bold;
+    margin:auto;
+}
+
+.book-image{
+    width:90px;
+    height:120px;
+    object-fit:cover;
+    border-radius:10px;
+}
+
+.price{
+    font-size:34px;
+    font-weight:bold;
+    color:#001a70;
+}
+
+.barcode{
+    font-family:monospace;
+    font-size:18px;
+    letter-spacing:2px;
+}
+
+/* =========================
+SECOND HAND
+========================= */
+
+.occase-row{
+    display:flex;
+    gap:20px;
+    padding:20px;
+}
+
+.occase-box{
+    flex:1;
+    border:2px solid #d8def0;
+    border-radius:18px;
+    padding:20px;
+    display:flex;
+    align-items:center;
+    gap:20px;
+    font-size:22px;
+    font-weight:bold;
+}
+
+/* =========================
+TOTALS
+========================= */
+
+.total-wrapper{
+    display:flex;
+    justify-content:flex-end;
+    padding:20px;
+}
+
+.total-box{
+    width:450px;
+    border-radius:18px;
+    overflow:hidden;
+}
+
+.total-line{
+    display:flex;
+    justify-content:space-between;
+    padding:18px 25px;
+    font-size:28px;
+    font-weight:bold;
+}
+
+.total-blue{
+    background:#001a70;
+    color:white;
+}
+
+.total-yellow{
+    background:#f2b300;
+    color:#111;
+}
+
+/* =========================
+PAYMENT
+========================= */
+
+.payment-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:20px;
+    gap:20px;
+}
+
+.payment-box{
+    flex:1;
+    border:2px solid #d8def0;
+    border-radius:18px;
+    padding:20px;
+    font-size:22px;
+    text-align:center;
+}
+
+.airtel{
+    color:red;
+    font-size:42px;
+    font-weight:bold;
+}
+
+/* =========================
+FOOTER
+========================= */
+
+.footer{
+    background:#001a70;
+    color:white;
+    padding:18px 30px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:18px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="page">
+
+<!-- HEADER -->
+
+<div class="header">
+
+<div class="logo-zone">
+
+<img src="logo-mdp.png">
+
+<div class="logo-text">
+<h1>Maison de<br>la Presse<br><span>Gabon</span></h1>
+<p>Lire, apprendre, réussir !</p>
+</div>
+
+</div>
+
+<div class="contact-zone">
+
+<div class="contact-block">
+📞 011 72 21 31<br>
+📞 011 77 26 95<br>
+🟢 WhatsApp : 066 956 027<br>
+✉️ ipc369@yahoo.fr<br>
+🌐 www.maisondelapressegabon.com
+</div>
+
+<div class="shop-box">
+2 MAGASINS<br><br>
+📍 GLASS<br>
+📍 OKALA
+</div>
+
+</div>
+
+</div>
+
+<!-- TOP BAR -->
+
+<div class="top-bar">
+
+<div>📋 LISTE VALORISÉE</div>
+<div>🛡️ ENGAGEMENTS</div>
+<div>🎁 COUVERTURE GRATUITE</div>
+
+</div>
+
+<!-- TITLE -->
+
+<div class="title-section">
+
+<div class="title-left">
+
+<img src="book-icon.png">
+
+<div class="main-title">
+LISTE SCOLAIRE<br>
+<span>VALORISÉE</span>
+</div>
+
+</div>
+
+<div class="class-box">
+CLASSE DE 6e<br>
+LYCÉE ET COLLÈGE<br>
+BLAISE PASCAL
+</div>
+
+</div>
+
+<!-- CLIENT -->
+
+<div class="client-box">
+
+<div class="client-title">
+CLIENT
+</div>
+
+<div class="client-grid">
+
+<div>
+Nom & prénom : ______________________
+</div>
+
+<div>
+Tél (WhatsApp) : ______________________
+</div>
+
+<div>
+Classe : ______________________
+</div>
+
+<div>
+Observations : ______________________
+</div>
+
+</div>
+
+</div>
+
+<!-- TABLE -->
+
+<div class="table-wrapper">
+
+<table>
+
+<thead>
+
+<tr>
+<th>N°</th>
+<th>VISUEL</th>
+<th>DÉSIGNATION</th>
+<th>ISBN</th>
+<th>QTÉ</th>
+<th>PRIX</th>
+<th>CODE BARRE</th>
+</tr>
+
+</thead>
+
+<tbody id="book-table">
+
+<!--
+LES LIVRES SERONT AJOUTÉS
+DYNAMIQUEMENT DEPUIS LA BASE
+-->
+
+</tbody>
+
+</table>
+
+</div>
+
+<!-- OCCASION -->
+
+<div class="occase-row">
+
+<div class="occase-box">
+📚 LIVRES SCOLAIRES D’OCCASION
+</div>
+
+<div class="occase-box">
+🌱 Donnez une seconde vie aux livres
+</div>
+
+</div>
+
+<!-- TOTAL -->
+
+<div class="total-wrapper">
+
+<div class="total-box">
+
+<div class="total-line total-blue">
+<span>TOTAL AVANT REMISE</span>
+<span id="subtotal">0</span>
+</div>
+
+<div class="total-line total-yellow">
+<span>REMISE COMMERCIALE 5%</span>
+<span id="discount">0</span>
+</div>
+
+<div class="total-line total-blue">
+<span>TOTAL TTC APRÈS REMISE</span>
+<span id="total">0</span>
+</div>
+
+</div>
+
+</div>
+
+<!-- PAYMENT -->
+
+<div class="payment-row">
+
+<div class="payment-box">
+MOYENS DE PAIEMENT ACCEPTÉS<br><br>
+<div class="airtel">M4010</div>
+</div>
+
+<div class="payment-box">
+PAIEMENT SÉCURISÉ<br>
+www.maisondelapressegabonairtel.com
+</div>
+
+<div class="payment-box">
+Conditions générales de ventes disponibles en magasin
+</div>
+
+</div>
+
+<!-- FOOTER -->
+
+<div class="footer">
+
+<div>
+La Maison de la Presse Gabon,
+partenaire privilégié de la réussite scolaire.
+</div>
+
+<div>
+Ce document est une liste valorisée et non un devis.
+</div>
+
+</div>
+
+</div>
+
+<!-- =========================
+JAVASCRIPT
+========================= -->
+
+<script>
+
+const books = [
+
+{
+    image:"book1.jpg",
+    title:"COLIBRIS : FRANÇAIS 6e",
+    isbn:"9782017223856",
+    qty:1,
+    price:39975
+},
+
+{
+    image:"book2.jpg",
+    title:"LA BELLE ET LA BÊTE",
+    isbn:"9782017014393",
+    qty:1,
+    price:9975
+},
+
+{
+    image:"book3.jpg",
+    title:"CALIMOTS CP",
+    isbn:"9782017014386",
+    qty:1,
+    price:12975
+}
+
+];
+
+const table = document.getElementById("book-table");
+
+let subtotal = 0;
+
+books.forEach((book,index)=>{
+
+subtotal += book.price;
+
+table.innerHTML += `
+
+<tr>
+
+<td class="center">
+<div class="line-number">${index+1}</div>
+</td>
+
+<td class="center">
+<img class="book-image" src="${book.image}">
+</td>
+
+<td>
+${book.title}
+</td>
+
+<td class="center">
+${book.isbn}
+</td>
+
+<td class="center">
+${book.qty}
+</td>
+
+<td class="center price">
+${book.price.toLocaleString("fr-FR")}
+</td>
+
+<td class="center barcode">
+||||||||||||||
+</td>
+
+</tr>
+
+`;
+
+});
+
+const discount = Math.round(subtotal * 0.05);
+const total = subtotal - discount;
+
+document.getElementById("subtotal").innerHTML =
+subtotal.toLocaleString("fr-FR");
+
+document.getElementById("discount").innerHTML =
+"- " + discount.toLocaleString("fr-FR");
+
+document.getElementById("total").innerHTML =
+total.toLocaleString("fr-FR");
+
+</script>
+
+</body>
+</html>

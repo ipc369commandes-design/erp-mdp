@@ -1,0 +1,32 @@
+uvicorn main:app --reload   ------------- lancer le serveur
+
+python -m tests.test_mdp  ----------------- lancer le test
+python -m tests.test_excel
+python -m tests.test_sync
+python -m tests.tes_mdp
+python -m tests.test_product_service
+python -m tests.test_type_detector
+python -m tests.check_tables
+python -m tests.check_metadata
+python -m tests.test_cache
+python -m tests.test_stats
+
+
+Serveurs de noms externes
+
+lola.ns.cloudflare.com
+malcolm.ns.cloudflare.com
+Modifier
+
+
+Gandi LiveDNS
+
+
+ns-238-a.gandi.net
+ns-115-b.gandi.net
+ns-101-c.gandi.net
+
+
+3020120816180
+
+https://openlibrary.org/api/books?bibkeys=ISBN:3020120816180&format=json&jscmd=data
