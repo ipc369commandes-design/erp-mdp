@@ -36,10 +36,7 @@ class CartItem(BaseModel):
 class GeneratePDFRequest(BaseModel):
     items: List[CartItem]
 
-router = APIRouter(
-    prefix="/school-lists-pdf",
-    tags=["School Lists PDF"]
-)
+router = APIRouter()
 
 
 def format_currency(value: float) -> str:
@@ -53,6 +50,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
     """Générer un PDF depuis le panier (articles du localStorage)"""
     
     try:
+        # Créer le PDF
         pdf_buffer = io_module.BytesIO()
         doc = SimpleDocTemplate(
             pdf_buffer,
@@ -122,7 +120,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
         header_table = Table(header_data, colWidths=[7.0*cm, 7.0*cm, 6.0*cm])
         header_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
@@ -155,14 +152,13 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
-        topbar_table = Table(topbar_data, colWidths=[7.0*cm, 6.0*cm, 7.0*cm])
+        # ✅ FIX : Définition de la hauteur de ligne propre via le paramètre de construction 'rowHeights'
+        topbar_table = Table(topbar_data, colWidths=[7.0*cm, 6.0*cm, 7.0*cm], rowHeights=[0.65*cm])
         topbar_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, 0), 4),
-            ('ROWHEIGHTS', (0, 0), (-1, -1), 0.65*cm),
         ]))
         elements.append(topbar_table)
         elements.append(Spacer(1, 0.2*cm))
@@ -202,8 +198,8 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
-        title_table = Table(title_data, colWidths=[13.0*cm, 7.0*cm])
+        # ✅ FIX : Définition de la hauteur de ligne propre via 'rowHeights'
+        title_table = Table(title_data, colWidths=[13.0*cm, 7.0*cm], rowHeights=[1.1*cm])
         title_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             ('ALIGN', (1, 0), (1, 0), 'CENTER'),
@@ -211,7 +207,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#001a70')),
             ('PADDING', (0, 0), (0, 0), 6),
             ('PADDING', (1, 0), (1, 0), 8),
-            ('ROWHEIGHTS', (0, 0), (-1, -1), 1.1*cm),
         ]))
         elements.append(title_table)
         elements.append(Spacer(1, 0.2*cm))
@@ -252,8 +247,8 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
-        client_table = Table(client_data, colWidths=[10.0*cm, 10.0*cm])
+        # ✅ FIX : Définition de la hauteur des lignes via 'rowHeights'
+        client_table = Table(client_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.5*cm, 0.55*cm, 0.55*cm])
         client_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -261,8 +256,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, -1), 4),
-            ('ROWHEIGHTS', (0, 0), (0, 0), 0.5*cm),
-            ('ROWHEIGHTS', (0, 1), (-1, -1), 0.55*cm),
         ]))
         elements.append(client_table)
         elements.append(Spacer(1, 0.15*cm))
@@ -319,7 +312,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
         if len(table_data) == 1:
             elements.append(Paragraph("Aucun article dans cette liste", styles['Normal']))
         else:
-            # Ajustement sur 20 cm
+            # ✅ FIX : Pas de hauteur fixe de ligne ici pour permettre le retour automatique à la ligne des titres de livres s'ils sont longs
             table = Table(
                 table_data,
                 repeatRows=1,
@@ -345,8 +338,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
                 ('PADDING', (0, 1), (-1, -1), 2),
-                ('ROWHEIGHTS', (0, 0), (0, 0), 0.55*cm),
-                ('ROWHEIGHTS', (0, 1), (-1, -1), 0.8*cm),
             ]
             
             for row_num in range(1, len(table_data)):
@@ -375,20 +366,20 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ]
             ]
             
-            # Ajustement sur 20 cm
-            occasion_table = Table(occasion_data, colWidths=[10.0*cm, 10.0*cm])
+            # ✅ FIX : rowHeights défini proprement dans la construction du tableau
+            occasion_table = Table(occasion_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
             occasion_table.setStyle(TableStyle([
                 ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('PADDING', (0, 0), (-1, -1), 3),
-                ('ROWHEIGHTS', (0, 0), (-1, -1), 0.55*cm),
             ]))
             elements.append(occasion_table)
             elements.append(Spacer(1, 0.15*cm))
             
             # ============= TOTALS SECTION (LIVE COMPUTED) =============
-            discount = Math.round(subtotal * 0.05) if hasattr(Math, 'round') else int(round(subtotal * 0.05))
+            # ✅ FIX : Calcul Python natif de la remise à 5 % à la place de Math.round (Javascript)
+            discount = int(round(subtotal * 0.05))
             final_total = subtotal - discount
             
             totals_data = [
@@ -406,8 +397,8 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ]
             ]
             
-            # Ajustement sur 20 cm
-            totals_table = Table(totals_data, colWidths=[14.0*cm, 6.0*cm])
+            # ✅ FIX : rowHeights défini proprement dans la construction du tableau
+            totals_table = Table(totals_data, colWidths=[14.0*cm, 6.0*cm], rowHeights=[0.6*cm, 0.6*cm, 0.6*cm])
             totals_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -420,7 +411,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                 ('PADDING', (0, 0), (-1, -1), 4),
-                ('ROWHEIGHTS', (0, 0), (-1, -1), 0.6*cm),
             ]))
             elements.append(totals_table)
             elements.append(Spacer(1, 0.15*cm))
@@ -444,14 +434,13 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
-        payment_table = Table(payment_data, colWidths=[6.6*cm, 6.6*cm, 6.8*cm])
+        # ✅ FIX : rowHeights défini proprement dans la construction du tableau
+        payment_table = Table(payment_data, colWidths=[6.6*cm, 6.6*cm, 6.8*cm], rowHeights=[1.0*cm])
         payment_table.setStyle(TableStyle([
             ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, -1), 3),
-            ('ROWHEIGHTS', (0, 0), (-1, -1), 1.0*cm),
         ]))
         elements.append(payment_table)
         elements.append(Spacer(1, 0.15*cm))
@@ -473,18 +462,20 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
-        footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm])
+        # ✅ FIX : rowHeights défini proprement dans la construction du tableau
+        footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
         footer_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#001a70')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, -1), 3),
-            ('ROWHEIGHTS', (0, 0), (-1, -1), 0.55*cm),
         ]))
         elements.append(footer_table)
         
+        # Générer le PDF
         doc.build(elements)
+        
+        # Retourner le PDF
         pdf_buffer.seek(0)
         
         return StreamingResponse(
@@ -633,14 +624,13 @@ def generate_school_list_pdf(
             ]
         ]
         
-        # Ajustement sur 20 cm
-        topbar_table = Table(topbar_data, colWidths=[7.0*cm, 6.0*cm, 7.0*cm])
+        # ✅ FIX : rowHeights défini proprement dans la construction du tableau
+        topbar_table = Table(topbar_data, colWidths=[7.0*cm, 6.0*cm, 7.0*cm], rowHeights=[0.65*cm])
         topbar_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, 0), 4),
-            ('ROWHEIGHTS', (0, 0), (-1, -1), 0.65*cm),
         ]))
         elements.append(topbar_table)
         elements.append(Spacer(1, 0.2*cm))
@@ -682,8 +672,8 @@ def generate_school_list_pdf(
             ]
         ]
         
-        # Ajustement sur 20 cm
-        title_table = Table(title_data, colWidths=[13.0*cm, 7.0*cm])
+        # ✅ FIX : rowHeights défini proprement dans la construction du tableau
+        title_table = Table(title_data, colWidths=[13.0*cm, 7.0*cm], rowHeights=[1.1*cm])
         title_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             ('ALIGN', (1, 0), (1, 0), 'CENTER'),
@@ -691,7 +681,6 @@ def generate_school_list_pdf(
             ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#001a70')),
             ('PADDING', (0, 0), (0, 0), 6),
             ('PADDING', (1, 0), (1, 0), 8),
-            ('ROWHEIGHTS', (0, 0), (-1, -1), 1.1*cm),
         ]))
         elements.append(title_table)
         elements.append(Spacer(1, 0.2*cm))
@@ -732,8 +721,8 @@ def generate_school_list_pdf(
             ]
         ]
 
-        # Ajustement sur 20 cm
-        client_table = Table(client_data, colWidths=[10.0*cm, 10.0*cm])
+        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+        client_table = Table(client_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.5*cm, 0.55*cm, 0.55*cm])
         client_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -741,8 +730,6 @@ def generate_school_list_pdf(
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, -1), 4),
-            ('ROWHEIGHTS', (0, 0), (0, 0), 0.5*cm),
-            ('ROWHEIGHTS', (0, 1), (-1, -1), 0.55*cm),
         ]))
         elements.append(client_table)
         elements.append(Spacer(1, 0.15*cm))
@@ -800,7 +787,7 @@ def generate_school_list_pdf(
         if len(table_data) == 1:
             elements.append(Paragraph("Aucun article dans cette liste", styles['Normal']))
         else:
-            # Ajustement sur 20 cm
+            # ✅ FIX : Pas de hauteur fixe de ligne ici pour permettre le retour automatique à la ligne des titres de livres s'ils sont longs
             table = Table(
                 table_data,
                 repeatRows=1,
@@ -826,8 +813,6 @@ def generate_school_list_pdf(
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
                 ('PADDING', (0, 1), (-1, -1), 2),
-                ('ROWHEIGHTS', (0, 0), (0, 0), 0.55*cm),
-                ('ROWHEIGHTS', (0, 1), (-1, -1), 0.8*cm),
             ]
             
             for row_num in range(1, len(table_data)):
@@ -856,14 +841,13 @@ def generate_school_list_pdf(
                 ]
             ]
             
-            # Ajustement sur 20 cm
-            occasion_table = Table(occasion_data, colWidths=[10.0*cm, 10.0*cm])
+            # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+            occasion_table = Table(occasion_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
             occasion_table.setStyle(TableStyle([
                 ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('PADDING', (0, 0), (-1, -1), 3),
-                ('ROWHEIGHTS', (0, 0), (-1, -1), 0.55*cm),
             ]))
             elements.append(occasion_table)
             elements.append(Spacer(1, 0.15*cm))
@@ -887,8 +871,8 @@ def generate_school_list_pdf(
                 ]
             ]
             
-            # Ajustement sur 20 cm
-            totals_table = Table(totals_data, colWidths=[14.0*cm, 6.0*cm])
+            # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+            totals_table = Table(totals_data, colWidths=[14.0*cm, 6.0*cm], rowHeights=[0.6*cm, 0.6*cm, 0.6*cm])
             totals_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -901,7 +885,6 @@ def generate_school_list_pdf(
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                 ('PADDING', (0, 0), (-1, -1), 4),
-                ('ROWHEIGHTS', (0, 0), (-1, -1), 0.6*cm),
             ]))
             elements.append(totals_table)
             elements.append(Spacer(1, 0.15*cm))
@@ -925,14 +908,13 @@ def generate_school_list_pdf(
             ]
         ]
         
-        # Ajustement sur 20 cm
-        payment_table = Table(payment_data, colWidths=[6.6*cm, 6.6*cm, 6.8*cm])
+        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+        payment_table = Table(payment_data, colWidths=[6.6*cm, 6.6*cm, 6.8*cm], rowHeights=[1.0*cm])
         payment_table.setStyle(TableStyle([
             ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, -1), 3),
-            ('ROWHEIGHTS', (0, 0), (-1, -1), 1.0*cm),
         ]))
         elements.append(payment_table)
         elements.append(Spacer(1, 0.15*cm))
@@ -954,14 +936,13 @@ def generate_school_list_pdf(
             ]
         ]
         
-        # Ajustement sur 20 cm
-        footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm])
+        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+        footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
         footer_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#001a70')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('PADDING', (0, 0), (-1, -1), 3),
-            ('ROWHEIGHTS', (0, 0), (-1, -1), 0.55*cm),
         ]))
         elements.append(footer_table)
         
