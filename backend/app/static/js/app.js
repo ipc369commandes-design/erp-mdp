@@ -1,6 +1,7 @@
 // ============= CONFIGURATION & ÉTAT GLOBAL =============
+// ============= CONFIGURATION & ÉTAT GLOBAL =============
 const CONFIG = {
-    API_BASE: 'http://localhost:8000',
+    API_BASE: window.location.origin, 
     ITEMS_PER_PAGE: 24
 };
 

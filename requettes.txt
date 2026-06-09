@@ -25,8 +25,82 @@ Gandi LiveDNS
 ns-238-a.gandi.net
 ns-115-b.gandi.net
 ns-101-c.gandi.net
-
+ipc369commandes@gmail.com
+ip369gabon*
 
 3020120816180
 
-https://openlibrary.org/api/books?bibkeys=ISBN:3020120816180&format=json&jscmd=data
+ipc369commandes-design
+
+
+# Initialiser Git dans votre dossier local
+git init
+
+# Ajouter tous les fichiers de votre projet au suivi Git
+git add .
+
+# Enregistrer votre premier commit de sauvegarde
+git commit -m "Initial commit - ERP MDP"
+
+git rm -r --cached venv
+
+git commit --amend --no-edit
+
+git push -u origin main
+
+git add votre_fichier_base.db
+git commit -m "Ajout de la base de données synchronisée"
+git push origin main
+
+
+# 1. Indiquer à Git d'enregistrer le fichier .gitignore
+git add .gitignore
+
+# 2. Créer un commit de sauvegarde
+git commit -m "Configure .gitignore pour exclure venv et les fichiers sensibles"
+
+# 3. Envoyer la mise à jour sur GitHub
+git push origin main
+
+
+
+# 1. Ajouter spécifiquement le fichier du dossier backend
+git add backend/requirements.txt
+
+# 2. Enregistrer la modification
+git commit -m "Forcer l'ajout de requirements.txt dans le dossier backend"
+
+# 3. Envoyer sur GitHub
+git push origin main
+``` [3]
+
+Une fois que vous aurez poussé ce commit, Render relancera automatiquement le déploiement. Vous verrez alors les lignes de téléchargement de `playwright`, de `fastapi` et de vos autres dépendances s'afficher, et l'installation de Chromium se fera correctement.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Configurer la branche principale sur 'main'
+git branch -M main
+
+# Lier votre dossier local à votre dépôt GitHub (remplacez par l'URL de votre dépôt)
+git remote add origin https://github.com/ipc369commandes-design/erp-mdp.git
+
+# Envoyer le code sur GitHub
+git push -u origin main
+
+
+SUR RENDER
+
+uvicorn main:app --host 0.0.0.0 --port $PORT
+pip install -r requirements.txt && playwright install chromium
+
