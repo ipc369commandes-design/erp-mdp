@@ -1,0 +1,44 @@
+# ==========================================
+# ENVIRONNEMENTS VIRTUELS PYTHON (Lourds)
+# ==========================================
+venv/
+.venv/
+env/
+ENV/
+ENV/
+
+# ==========================================
+# CACHES ET FICHIERS TEMPORAIRES PYTHON
+# ==========================================
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# ==========================================
+# SESSIONS ET CAPTURES DE PLAYWRIGHT (Confidentiels)
+# ==========================================
+state.json
+*.png
+*.jpeg
+*.jpg
+.auth/
+
+# ==========================================
+# BASES DE DONNÉES LOCALES (SQLite)
+# ==========================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# CONFIGURATIONS D'ÉDITEURS & FICHIERS SYSTÈME
+# ==========================================
+.vscode/
+.idea/
+.project
+.pydevproject
+.DS_Store
+Thumbs.db
