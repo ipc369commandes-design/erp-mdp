@@ -11,6 +11,8 @@ python -m tests.check_metadata
 python -m tests.test_cache
 python -m tests.test_stats
 
+python -m tests.export_school_lists_to_excel
+
 
 Serveurs de noms externes
 
@@ -40,7 +42,7 @@ git init
 git add .
 
 # Enregistrer votre premier commit de sauvegarde
-git commit -m "Initial commit - ERP MDP"
+git commit -m "Mise à jour"
 
 git rm -r --cached venv
 
@@ -104,3 +106,54 @@ SUR RENDER
 uvicorn main:app --host 0.0.0.0 --port $PORT
 pip install -r requirements.txt && playwright install chromium
 
+
+
+
+🔍 DETECTION MDP : 9782818702871
+   Test type 1
+🔄 Synchronisation en cours -⚠️ Type 1 : HTTP 500:
+   Test type 5
+🔄 Synchronisation en cours \⚠️ Type 1 : HTTP 500:
+   Test type 5
+🔄 Synchronisation en cours /   Test type 6
+🔄 Synchronisation en cours -   Test type 6
+💾 CACHE SAVE : 9782818907900 -> NOT_FOUND
+🔍 DETECTION MDP : 9782818702840
+   Test type 1
+🔄 Synchronisation en cours \💾 CACHE SAVE : 9782014645392 -> NOT_FOUND
+🔍 DETECTION MDP : 9782818703267
+   Test type 1
+🔄 Synchronisation en cours |⚠️ Type 1 : HTTP 500:
+   Test type 5
+🔄 Synchronisation en cours -   Test type 6
+🔄 Synchronisation en cours \💾 CACHE SAVE : 9782818702871 -> NOT_FOUND
+🔍 DETECTION MDP : 9782266245487
+   Test type 1
+🔄 Synchronisation en cours |⚠️ Type 1 : HTTP 500:
+   Test type 5
+⚠️ Type 1 : HTTP 500:
+   Test type 5
+🔄 Synchronisation en cours \   Test type 6
+🔄 Synchronisation en cours |   Test type 6
+💾 CACHE SAVE : 9782818702840 -> NOT_FOUND
+🔍 DETECTION MDP : 9782266204965
+   Test type 1
+🔄 Synchronisation en cours /⚠️ Type 1 : HTTP 500:
+   Test type 5
+💾 CACHE SAVE : 9782818703267 -> NOT_FOUND
+🔍 DETECTION MDP : 9782262029869
+   Test type 1
+🔄 Synchronisation en cours -   Test type 6
+
+
+bouton à remettre:
+BOUTON JS
+ <button class="btn btn-info" id="importPlatformBtn" style="padding: 12px 20px; width: 100%;">🔄 Importer Plateforme</button>
+
+
+Bouton HTML
+  <button id="syncBtn" class="sync-btn">
+     ⚙️ Lancer la synchronisation
+  </button>
+
+importBtn.textContent = "🔄 Importer Plateforme";

@@ -1783,7 +1783,7 @@ async function openListItemsModal(listId) {
                             <input type="number" id="productQty" value="1" min="1" style="padding: 12px; border: 1.5px solid #d8def0; border-radius: 8px; text-align: center; font-weight: bold; font-size: 14px;">
                             <button class="btn btn-primary" id="addAndRefreshBtn" style="padding: 12px 20px; width: 100%;">➕ Ajouter</button>
                             <!-- ✅ FIX : Réintégration physique du bouton importPlatformBtn requis par le script -->
-                           
+                            <button class="btn btn-info" id="importPlatformBtn" style="padding: 12px 20px; width: 100%;">🔄 Importer Plateforme</button>
                         </div>
                         <div id="selectedProductInfo" style="margin-top: 12px; padding: 10px; background: #e8f4f8; border-radius: 6px; display: none; border-left: 4px solid #3b82f6;"></div>
                     </div>
@@ -2004,7 +2004,7 @@ async function openListItemsModal(listId) {
                     alert("❌ Erreur : " + e.message);
                     const importBtn = overlay.querySelector('#importPlatformBtn');
                     importBtn.disabled = false;
-                    
+                    importBtn.textContent = "🔄 Importer Plateforme";
                 }
             }
         });
