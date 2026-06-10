@@ -9,6 +9,7 @@ from app.models.product import Product
 from app.models.sync_status import SyncStatus
 from app.services.type_detector import TypeDetector
 
+
 class SyncService:
     def __init__(
         self, 
@@ -23,7 +24,7 @@ class SyncService:
         self.client = MDPClient(use_proxy=False)
         self.use_proxy = use_proxy
         
-        # Callbacks pour interagir proprement avec l'API sans polluer le contexte global
+        # Callbacks d'interaction pour le serveur web et la console
         self.log_callback = log_callback or (lambda msg: print(msg))
         self.stop_checker = stop_checker or (lambda: False)
         self.product_tracker = product_tracker or (lambda title: None)
@@ -35,8 +36,11 @@ class SyncService:
     def log(self, message: str):
         self.log_callback(message)
 
+    # ==========================================
+    # UPSERT PRODUCT + SYNC_STATUS
+    # ==========================================
     def upsert_with_status(self, db, data: dict, status: str, error_msg: Optional[str] = None):
-        """Met à jour ou insère un produit et son statut de synchronisation"""
+        """Mettre à jour ou insérer un produit et son statut de synchronisation"""
         product = db.query(Product).filter(Product.code == data["code"]).first()
 
         if product:
@@ -89,17 +93,18 @@ class SyncService:
         self.type_cache[code] = type_
         return type_
 
+    # ==========================================
+    # SYNC ONE ITEM (avec retry intelligent)
+    # ==========================================
     async def sync_one(self, item: dict, retry_count: int = 0):
-        """Synchroniser un produit unique (Gestion optimisée de la session de base de données)"""
         code = item["code"]
         prix_vente = item["prix_vente"]
         max_retries = 3
 
         async with self.semaphore:
-            # Ouverture d'une SEULE et unique session de base de données par produit
             db = SessionLocal()
             try:
-                # 1. Détection du type
+                # 1. DETECTION TYPE PRODUIT
                 type_produit = await self.get_type(code)
                 if type_produit is None:
                     self.upsert_with_status(
@@ -111,7 +116,7 @@ class SyncService:
                     self.log(f"❌ {code}: type_produit introuvable")
                     return
 
-                # 2. Appel à la plateforme
+                # 2. APPEL API MDP
                 response = await self.client.get_article(code=code, type_produit=type_produit)
                 if response is None:
                     self.upsert_with_status(
@@ -166,7 +171,7 @@ class SyncService:
                     wait_time = 2 ** (retry_count + 1)
                     self.log(f"🔄 Retry {retry_count + 1}/{max_retries} pour {code} dans {wait_time}s...")
                     await asyncio.sleep(wait_time)
-                    db.close() # Important : Fermer la session avant la récursion
+                    db.close()
                     return await self.sync_one(item, retry_count + 1)
 
                 self.upsert_with_status(
@@ -178,32 +183,68 @@ class SyncService:
                 self.log(f"❌ {code}: {error_msg}")
             finally:
                 db.close()
+                
+    # ==========================================
+    # SPINNER CONSOLE DYNAMIQUE (Méthode de la classe)
+    # ==========================================
+    async def spinner(self, stop_event):
+        """Affiche un spinner console dynamique pendant l'exécution"""
+        chars = ["|", "/", "-", "\\"]
+        idx = 0
 
+        while not stop_event.is_set():
+            print(
+                f"\r🔄 Synchronisation en cours {chars[idx % len(chars)]}",
+                end="",
+                flush=True
+            )
+            idx += 1
+            await asyncio.sleep(0.2)
+
+        print("\r✅ Synchronisation terminée          ")
+
+    # ==========================================
+    # GET PENDING PRODUCTS
+    # ==========================================
     def get_pending_products(self):
-        """Récupérer les produits restants depuis le fichier Excel"""
+        """Récupérer les produits qui n'ont pas encore été syncés"""
         db = SessionLocal()
         try:
             all_products = self.reader.load()
-            synced_codes = db.query(SyncStatus.code).filter(SyncStatus.status == "success").all()
+            synced_codes = db.query(SyncStatus.code).filter(
+                SyncStatus.status == "success"
+            ).all()
             synced_codes = [c[0] for c in synced_codes]
             return [p for p in all_products if p["code"] not in synced_codes]
         finally:
             db.close()
 
-    async def run(self, batch_size: int = 10, delay_between_batches: float = 1.5):
-        """Lancer la synchronisation par batches, avec support de l'arrêt en cours de route"""
-        self.semaphore = asyncio.Semaphore(1)
-        products = self.get_pending_products()
+    # ==========================================
+    # RUN FULL SYNC (Optimisé avec Concurrence)
+    # ==========================================
+    async def run(self, batch_size: int = 15, delay_between_batches: float = 1.0, concurrency: int = 3):
+        """Lancer la synchronisation par lots de façon optimisée"""
+        # Configuration dynamique du Sémaphore
+        self.semaphore = asyncio.Semaphore(concurrency)
         
+        stop_event = asyncio.Event()
+        spinner_task = asyncio.create_task(self.spinner(stop_event))
+
+        # Récupérer les produits restants
+        products = self.get_pending_products()
         if not products:
             products = self.reader.load()
 
         self.log(f"📦 {len(products)} articles à traiter.")
+        self.log(f"⚙️ Configuration de vitesse sûre :")
+        self.log(f"   • Concurrence max : {concurrency} requêtes simultanées")
+        self.log(f"   • Taille des batches : {batch_size} articles")
+        self.log(f"   • Délai entre batches : {delay_between_batches}s")
+
         total_batches = (len(products) + batch_size - 1) // batch_size
         synced_count = 0
 
         for i in range(0, len(products), batch_size):
-            # ✅ CHECK STOP : Permet l'arrêt immédiat entre deux batches
             if self.stop_checker():
                 self.log("⛔ Synchronisation interrompue à la demande de l'utilisateur.")
                 break
@@ -219,4 +260,26 @@ class SyncService:
             synced_count += len(batch)
             await asyncio.sleep(delay_between_batches)
             
-        self.log("🏁 Fin du processus de synchronisation")
+        stop_event.set()
+        await spinner_task
+        self.log("✅ SYNC TERMINÉ")
+
+    # ==========================================
+    # GET SYNC STATS
+    # ==========================================
+    def get_sync_stats(self):
+        """Afficher les statistiques de synchronisation"""
+        db = SessionLocal()
+        try:
+            total = db.query(SyncStatus).count()
+            success = db.query(SyncStatus).filter(SyncStatus.status == "success").count()
+            failed = db.query(SyncStatus).filter(SyncStatus.status == "failed").count()
+            pending = db.query(SyncStatus).filter(SyncStatus.status == "pending").count()
+            
+            print(f"\n📊 Stats de synchronisation:")
+            print(f"   Total: {total}")
+            print(f"   ✅ Success: {success} ({(success/total*100):.1f}%)" if total > 0 else "   ✅ Success: 0")
+            print(f"   ❌ Failed: {failed} ({(failed/total*100):.1f}%)" if total > 0 else "   ❌ Failed: 0")
+            print(f"   ⏳ Pending: {pending} ({(pending/total*100):.1f}%)" if total > 0 else "   ⏳ Pending: 0")
+        finally:
+            db.close()

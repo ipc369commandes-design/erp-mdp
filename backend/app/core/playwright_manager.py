@@ -18,8 +18,10 @@ class PlaywrightManager:
 
             cls._playwright = await async_playwright().start()
 
+            # ✅ FIX : Ajout de '--disable-http2' dans les arguments pour éliminer ERR_HTTP2_PROTOCOL_ERROR
             cls._browser = await cls._playwright.chromium.launch(
-                headless=headless
+                headless=headless,
+                args=["--disable-http2"]
             )
 
             return cls._browser

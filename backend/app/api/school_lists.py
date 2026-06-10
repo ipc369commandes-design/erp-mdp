@@ -16,6 +16,7 @@ from app.schemas.school import SchoolCreate, SchoolResponse
 from app.schemas.school_year import SchoolYearCreate, SchoolYearResponse
 from app.schemas.school_list import SchoolListCreate, SchoolListResponse
 from app.schemas.school_list_item import SchoolListItemCreate, SchoolListItemResponse
+from app.services.extractor_service import SchoolListExtractor
 
 router = APIRouter(
     tags=["School Lists"]
@@ -199,3 +200,12 @@ def delete_year(id: int, db: Session = Depends(get_db)):
     db.delete(obj)
     db.commit()
     return {"success": True}
+
+
+
+@router.post("/school-lists/{list_id}/import-from-platform")
+async def import_list_from_platform(list_id: int):
+    """Déclencher l'extraction automatique de la page libre vers cette liste scolaire"""
+    extractor = SchoolListExtractor(list_id=list_id)
+    await extractor.extract_and_inject()
+    return {"success": True, "message": "Extraction et valorisation terminées"}

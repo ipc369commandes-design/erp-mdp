@@ -17,7 +17,17 @@ class AuthManager:
         self.page: Page | None = None
 
     async def init(self):
-        await PlaywrightManager.init(headless=True) # headles=True recommandé pour le serveur de prod
+        # ✅ Détection dynamique de l'environnement (Render vs Local Windows)
+        is_render = os.getenv("RENDER") is not None
+        
+        # En production sur Render (Linux) -> headless=True (obligatoire sans écran)
+        # En local sur Windows -> headless=False (évite le blocage pare-feu et permet le débogage visuel)
+        headless_mode = True if is_render else False
+        
+        print(f"⚙️ AuthManager - Mode headless configuré sur : {headless_mode}")
+        
+        # Initialiser Playwright avec le mode adapté
+        await PlaywrightManager.init(headless=headless_mode)
         self.browser = await PlaywrightManager.get_browser()
 
     async def _new_context(self, storage=None):

@@ -1,6 +1,6 @@
 // ============= CONFIGURATION & ÉTAT GLOBAL =============
-// ============= CONFIGURATION & ÉTAT GLOBAL =============
 const CONFIG = {
+    // Utilise dynamiquement le domaine actuel (localhost en local, ou onrender en ligne)
     API_BASE: window.location.origin, 
     ITEMS_PER_PAGE: 24
 };
@@ -77,7 +77,6 @@ function updateCartBadge() {
 }
 
 function openShoppingListModal() {
-    // Supprimer une ancienne modale si elle existe déjà
     const existingModal = document.querySelector('.shopping-list-overlay');
     if (existingModal) existingModal.remove();
 
@@ -1775,13 +1774,16 @@ async function openListItemsModal(listId) {
                     <!-- ================= CONTRÔLE D'AJOUT (ZONE ADMIN) ================= -->
                     <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1200px; margin-left: auto; margin-right: auto; border: 1px solid #d8def0;">
                         <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #001a70; font-size: 15px;">🔍 Ajouter un produit à cette maquette :</label>
-                        <div style="display: grid; grid-template-columns: 1fr 100px 140px; gap: 12px;">
+                        <!-- ✅ FIX : Intégration d'une colonne supplémentaire de 160px dans la grille pour accueillir le bouton de plateforme -->
+                        <div style="display: grid; grid-template-columns: 1fr 100px 140px 200px; gap: 12px;">
                             <div style="position: relative;">
                                 <input type="text" id="productSearch" placeholder="Rechercher un produit par titre ou code-barres..." style="width: 100%; padding: 12px; border: 1.5px solid #d8def0; border-radius: 8px; font-size: 14px;">
                                 <div id="productSearchResults" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; max-height: 250px; overflow-y: auto; display: none; z-index: 10; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-radius: 0 0 8px 8px;"></div>
                             </div>
                             <input type="number" id="productQty" value="1" min="1" style="padding: 12px; border: 1.5px solid #d8def0; border-radius: 8px; text-align: center; font-weight: bold; font-size: 14px;">
-                            <button class="btn btn-primary" id="addAndRefreshBtn" style="padding: 12px 20px;">➕ Ajouter</button>
+                            <button class="btn btn-primary" id="addAndRefreshBtn" style="padding: 12px 20px; width: 100%;">➕ Ajouter</button>
+                            <!-- ✅ FIX : Réintégration physique du bouton importPlatformBtn requis par le script -->
+                           
                         </div>
                         <div id="selectedProductInfo" style="margin-top: 12px; padding: 10px; background: #e8f4f8; border-radius: 6px; display: none; border-left: 4px solid #3b82f6;"></div>
                     </div>
@@ -1901,11 +1903,11 @@ async function openListItemsModal(listId) {
                                 MOYENS DE PAIEMENT ACCEPTÉS<br><br>
                                 <div class="airtel" style="color: red; font-size: 24px; font-weight: bold; margin-top: 5px;">M4010</div>
                             </div>
-                            <div class="payment-box" style="flex: 1; border: 2px solid #d8def0; border-radius: 12px; padding: 12px; font-size: 12px; text-align: center; color: #333; height: 90px; display: flex; align-items: center; justify-content: center;">
+                            <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">
                                 PAIEMENT SÉCURISÉ<br>
                                 www.maisondelapressegabonairtel.com
                             </div>
-                            <div class="payment-box" style="flex: 1; border: 2px solid #d8def0; border-radius: 12px; padding: 12px; font-size: 12px; text-align: center; color: #333; height: 90px; display: flex; align-items: center; justify-content: center;">
+                            <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">
                                 Conditions générales de ventes disponibles en magasin
                             </div>
                         </div>
@@ -1984,6 +1986,29 @@ async function openListItemsModal(listId) {
         // Événement d'ajout d'un produit
         overlay.querySelector('#addAndRefreshBtn').addEventListener('click', () => addProductToList(listId));
 
+        // ✅ FIX : Liaison sans crash avec le bouton d'importation depuis la plateforme enfin réintégré
+        overlay.querySelector('#importPlatformBtn').addEventListener('click', async () => {
+            if (confirm("Voulez-vous extraire et injecter automatiquement les articles de cette classe depuis pages_libres.php ?")) {
+                try {
+                    const importBtn = overlay.querySelector('#importPlatformBtn');
+                    importBtn.disabled = true;
+                    importBtn.textContent = "⏳ Importation...";
+                    
+                    const res = await fetch(`${CONFIG.API_BASE}/school-lists/${listId}/import-from-platform`, { method: 'POST' });
+                    if (!res.ok) throw new Error('Erreur réseau');
+                    
+                    alert("✅ Importation, appariement et valorisation réussis !");
+                    overlay.remove();
+                    openListItemsModal(listId); // Rafraîchit l'affichage maquette
+                } catch (e) {
+                    alert("❌ Erreur : " + e.message);
+                    const importBtn = overlay.querySelector('#importPlatformBtn');
+                    importBtn.disabled = false;
+                    
+                }
+            }
+        });
+
         // Événement d'enregistrement des modifications de quantité ou de prix
         overlay.querySelector('#saveItemsListBtn').addEventListener('click', () => saveListItems(listId));
 
@@ -2050,7 +2075,7 @@ async function saveListItems(listId) {
             fetch(`${CONFIG.API_BASE}/school-list-items/${itemId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ quantite, prix_force })
+                body: JSON.stringify({ quantite: quantite, prix_force: prix_force })
             })
         );
     }
@@ -2095,7 +2120,7 @@ async function generateListPDF(id) {
         a.click();
         window.URL.revokeObjectURL(url);
     } catch (error) {
-        alert('❌ Erreur de génération du PDF: ' + error.message);
+        alert('❌ Erreur de génération du PDF: ' + message);
     }
 }
 
