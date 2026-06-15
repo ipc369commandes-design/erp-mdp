@@ -1,3 +1,5 @@
+### La correction définitive
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 from app.services.sync_service import SyncService
@@ -140,7 +142,12 @@ async def run_sync_task():
         )
         
         sync_status["message"] = "🔄 Synchronisation en cours..."
-        await sync_service.run(batch_size=5, delay_between_batches=2.0)
+        
+        # ✅ FIX : Lancement avec les paramètres de performance optimisés
+        # - batch_size : 15 articles par lot
+        # - delay_between_batches : 1.0 seconde de repos
+        # - concurrency : 3 requêtes simultanées autorisées via Sémaphore
+        await sync_service.run(batch_size=15, delay_between_batches=1.0, concurrency=3)
         
         if sync_status["should_stop"]:
             sync_status["message"] = "⛔ Synchronisation arrêtée par l'utilisateur"
