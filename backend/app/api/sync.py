@@ -1,5 +1,3 @@
-### La correction définitive
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 from app.services.sync_service import SyncService
@@ -112,7 +110,7 @@ def stop_sync():
     }
 
 async def run_sync_task():
-    """Tâche d'arrière-plan asynchrone et isolée"""
+    """Tâche d'arrière-plan asynchrone, isolée et protégée en mémoire"""
     try:
         excel_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
@@ -143,11 +141,23 @@ async def run_sync_task():
         
         sync_status["message"] = "🔄 Synchronisation en cours..."
         
-        # ✅ FIX : Lancement avec les paramètres de performance optimisés
-        # - batch_size : 15 articles par lot
-        # - delay_between_batches : 1.0 seconde de repos
-        # - concurrency : 3 requêtes simultanées autorisées via Sémaphore
-        await sync_service.run(batch_size=15, delay_between_batches=1.0, concurrency=3)
+        # ✅ FIX : Calibrage dynamique selon l'environnement (Render vs Local)
+        is_render = os.getenv("RENDER") is not None
+        
+        if is_render:
+            # Sur Render (Limité à 512 Mo de RAM) : Configuration ultra-légère et sécurisée
+            batch_size = 5
+            delay = 2.0
+            concurrency = 1
+            log_capture.add("ℹ️ Mode économie de mémoire activé pour Render (Limite 512 Mo).")
+        else:
+            # En local (votre PC) : Mode vitesse maximale
+            batch_size = 15
+            delay = 1.0
+            concurrency = 3
+            log_capture.add("ℹ️ Mode performance maximale activé pour le développement local.")
+            
+        await sync_service.run(batch_size=batch_size, delay_between_batches=delay, concurrency=concurrency)
         
         if sync_status["should_stop"]:
             sync_status["message"] = "⛔ Synchronisation arrêtée par l'utilisateur"
