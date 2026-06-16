@@ -102,29 +102,38 @@ class SyncService:
         max_retries = 3
 
         async with self.semaphore:
-            db = SessionLocal()
+            # ✅ FIX : Nous n'ouvrons plus la session DB ici pour éviter de bloquer la base de données 
+            # pendant les longs appels réseau asynchrones de Playwright
             try:
-                # 1. DETECTION TYPE PRODUIT
+                # 1. DETECTION TYPE PRODUIT (Appel réseau)
                 type_produit = await self.get_type(code)
                 if type_produit is None:
-                    self.upsert_with_status(
-                        db,
-                        {"code": code, "type_produit": None, "titre": None, "prix_vente": prix_vente},
-                        "failed",
-                        "Type produit introuvable"
-                    )
+                    db = SessionLocal() # Ouverture au dernier moment pour l'écriture
+                    try:
+                        self.upsert_with_status(
+                            db,
+                            {"code": code, "type_produit": None, "titre": None, "prix_vente": prix_vente},
+                            "failed",
+                            "Type produit introuvable"
+                        )
+                    finally:
+                        db.close()
                     self.log(f"❌ {code}: type_produit introuvable")
                     return
 
-                # 2. APPEL API MDP
+                # 2. APPEL API MDP (Appel réseau)
                 response = await self.client.get_article(code=code, type_produit=type_produit)
                 if response is None:
-                    self.upsert_with_status(
-                        db,
-                        {"code": code, "type_produit": type_produit, "titre": None, "prix_vente": prix_vente},
-                        "failed",
-                        "Réponse vide"
-                    )
+                    db = SessionLocal() # Ouverture au dernier moment pour l'écriture
+                    try:
+                        self.upsert_with_status(
+                            db,
+                            {"code": code, "type_produit": type_produit, "titre": None, "prix_vente": prix_vente},
+                            "failed",
+                            "Réponse vide"
+                        )
+                    finally:
+                        db.close()
                     self.log(f"❌ {code}: Réponse vide de la plateforme")
                     return
 
@@ -153,8 +162,13 @@ class SyncService:
                     "synced_at": datetime.utcnow()
                 }
 
-                self.upsert_with_status(db, data, "success")
-                self.log(f"✔ {code} : {article.get('titre', '')[:30]}")
+                # ✅ Étape d'écriture en base (Dure seulement quelques millisecondes)
+                db = SessionLocal()
+                try:
+                    self.upsert_with_status(db, data, "success")
+                    self.log(f"✔ {code} : {article.get('titre', '')[:30]}")
+                finally:
+                    db.close()
 
             except Exception as e:
                 error_str = str(e)
@@ -171,24 +185,24 @@ class SyncService:
                     wait_time = 2 ** (retry_count + 1)
                     self.log(f"🔄 Retry {retry_count + 1}/{max_retries} pour {code} dans {wait_time}s...")
                     await asyncio.sleep(wait_time)
-                    db.close()
                     return await self.sync_one(item, retry_count + 1)
 
-                self.upsert_with_status(
-                    db,
-                    {"code": code, "prix_vente": prix_vente},
-                    "failed",
-                    error_msg
-                )
+                db = SessionLocal()
+                try:
+                    self.upsert_with_status(
+                        db,
+                        {"code": code, "prix_vente": prix_vente},
+                        "failed",
+                        error_msg
+                    )
+                finally:
+                    db.close()
                 self.log(f"❌ {code}: {error_msg}")
-            finally:
-                db.close()
                 
     # ==========================================
-    # SPINNER CONSOLE DYNAMIQUE (Méthode de la classe)
+    # SPINNER CONSOLE DYNAMIQUE
     # ==========================================
     async def spinner(self, stop_event):
-        """Affiche un spinner console dynamique pendant l'exécution"""
         chars = ["|", "/", "-", "\\"]
         idx = 0
 
