@@ -36,7 +36,7 @@ class CartItem(BaseModel):
 class GeneratePDFRequest(BaseModel):
     items: List[CartItem]
 
-# ✅ FIX : Initialisation du routeur générique sans préfixe pour éviter d'altérer la route POST du panier
+# ✅ FIX : Initialisation du routeur générique sans préfixe
 router = APIRouter()
 
 
@@ -120,7 +120,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
         header_table = Table(header_data, colWidths=[7.0*cm, 7.0*cm, 6.0*cm])
         header_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
@@ -153,7 +152,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
+        # ✅ FIX : Définition de la hauteur de ligne propre via le paramètre de construction 'rowHeights'
         topbar_table = Table(topbar_data, colWidths=[7.0*cm, 6.0*cm, 7.0*cm], rowHeights=[0.65*cm])
         topbar_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -199,7 +198,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
+        # ✅ FIX : Définition de la hauteur de ligne propre via 'rowHeights'
         title_table = Table(title_data, colWidths=[13.0*cm, 7.0*cm], rowHeights=[1.1*cm])
         title_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),

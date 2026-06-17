@@ -1774,7 +1774,6 @@ async function openListItemsModal(listId) {
                     <!-- ================= CONTRÔLE D'AJOUT (ZONE ADMIN) ================= -->
                     <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1200px; margin-left: auto; margin-right: auto; border: 1px solid #d8def0;">
                         <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #001a70; font-size: 15px;">🔍 Ajouter un produit à cette maquette :</label>
-                        <!-- ✅ FIX : Intégration d'une colonne supplémentaire de 160px dans la grille pour accueillir le bouton de plateforme -->
                         <div style="display: grid; grid-template-columns: 1fr 100px 140px 200px; gap: 12px;">
                             <div style="position: relative;">
                                 <input type="text" id="productSearch" placeholder="Rechercher un produit par titre ou code-barres..." style="width: 100%; padding: 12px; border: 1.5px solid #d8def0; border-radius: 8px; font-size: 14px;">
@@ -1782,7 +1781,6 @@ async function openListItemsModal(listId) {
                             </div>
                             <input type="number" id="productQty" value="1" min="1" style="padding: 12px; border: 1.5px solid #d8def0; border-radius: 8px; text-align: center; font-weight: bold; font-size: 14px;">
                             <button class="btn btn-primary" id="addAndRefreshBtn" style="padding: 12px 20px; width: 100%;">➕ Ajouter</button>
-                            <!-- ✅ FIX : Réintégration physique du bouton importPlatformBtn requis par le script -->
                             <button class="btn btn-info" id="importPlatformBtn" style="padding: 12px 20px; width: 100%;">🔄 Importer Plateforme</button>
                         </div>
                         <div id="selectedProductInfo" style="margin-top: 12px; padding: 10px; background: #e8f4f8; border-radius: 6px; display: none; border-left: 4px solid #3b82f6;"></div>
@@ -1881,7 +1879,8 @@ async function openListItemsModal(listId) {
 
                         <!-- TOTALS SECTION (LIVE PREVIEW) -->
                         <div class="total-wrapper" style="display: flex; justify-content: flex-end; padding: 20px 35px; background: white;">
-                            <div class="total-box" style="width: 380px; border-radius: 12px; overflow: hidden; border: 2px solid #d8def0;">
+                            <!-- ✅ Identifiant 'interactiveTotalBox' pour cibler la zone en JS lors de la saisie -->
+                            <div class="total-box" id="interactiveTotalBox" style="width: 380px; border-radius: 12px; overflow: hidden; border: 2px solid #d8def0;">
                                 <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #001a70; color: white;">
                                     <span>TOTAL AVANT REMISE</span>
                                     <span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
@@ -1983,10 +1982,55 @@ async function openListItemsModal(listId) {
             }
         });
 
+        // ✅ FONCTION DE RECALCUL EN TEMPS RÉEL (REAL-TIME COMPUTATION)
+        const recalculateTotals = () => {
+            let newSubtotal = 0;
+            const rows = overlay.querySelectorAll('tbody tr');
+            
+            rows.forEach(row => {
+                const qtyInput = row.querySelector('.item-qty-input');
+                const priceInput = row.querySelector('.item-price-input');
+                if (!qtyInput || !priceInput) return;
+
+                const qty = parseInt(qtyInput.value) || 1;
+                // Si le champ de prix forcé est vide, on prend la valeur d'origine du placeholder (prix catalogue)
+                const price = parseFloat(priceInput.value) || parseFloat(priceInput.placeholder) || 0;
+                
+                newSubtotal += price * qty;
+            });
+
+            const newDiscount = Math.round(newSubtotal * 0.05);
+            const newTotalTtc = newSubtotal - newDiscount;
+
+            // Remplacer dynamiquement le contenu du panneau des totaux à l'écran
+            const totalBox = overlay.querySelector('#interactiveTotalBox');
+            if (totalBox) {
+                totalBox.innerHTML = `
+                    <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #001a70; color: white;">
+                        <span>TOTAL AVANT REMISE</span>
+                        <span>${newSubtotal.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                    <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #fef08a; color: #854d0e;">
+                        <span>REMISE COMMERCIALE 5%</span>
+                        <span>- ${newDiscount.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                    <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
+                        <span>TOTAL TTC APRÈS REMISE</span>
+                        <span>${newTotalTtc.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                `;
+            }
+        };
+
+        // ✅ Écouter en temps réel les changements de quantité et de prix forcé sur toute la table
+        overlay.querySelectorAll('.item-qty-input, .item-price-input').forEach(input => {
+            input.addEventListener('input', recalculateTotals);
+        });
+
         // Événement d'ajout d'un produit
         overlay.querySelector('#addAndRefreshBtn').addEventListener('click', () => addProductToList(listId));
 
-        // ✅ FIX : Liaison sans crash avec le bouton d'importation depuis la plateforme enfin réintégré
+        // Liaison avec le bouton d'importation depuis la plateforme
         overlay.querySelector('#importPlatformBtn').addEventListener('click', async () => {
             if (confirm("Voulez-vous extraire et injecter automatiquement les articles de cette classe depuis pages_libres.php ?")) {
                 try {
