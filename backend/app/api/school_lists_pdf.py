@@ -152,7 +152,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # ✅ FIX : Définition de la hauteur de ligne propre via le paramètre de construction 'rowHeights'
         topbar_table = Table(topbar_data, colWidths=[7.0*cm, 6.0*cm, 7.0*cm], rowHeights=[0.65*cm])
         topbar_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -198,7 +197,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # ✅ FIX : Définition de la hauteur de ligne propre via 'rowHeights'
         title_table = Table(title_data, colWidths=[13.0*cm, 7.0*cm], rowHeights=[1.1*cm])
         title_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
@@ -247,7 +245,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
 
-        # Ajustement sur 20 cm
         client_table = Table(client_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.5*cm, 0.55*cm, 0.55*cm])
         client_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -312,7 +309,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
         if len(table_data) == 1:
             elements.append(Paragraph("Aucun article dans cette liste", styles['Normal']))
         else:
-            # Ajustement sur 20 cm
             table = Table(
                 table_data,
                 repeatRows=1,
@@ -366,7 +362,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ]
             ]
             
-            # Ajustement sur 20 cm
             occasion_table = Table(occasion_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
             occasion_table.setStyle(TableStyle([
                 ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
@@ -396,7 +391,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ]
             ]
             
-            # Ajustement sur 20 cm
             totals_table = Table(totals_data, colWidths=[14.0*cm, 6.0*cm], rowHeights=[0.6*cm, 0.6*cm, 0.6*cm])
             totals_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -433,7 +427,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
         payment_table = Table(payment_data, colWidths=[6.6*cm, 6.6*cm, 6.8*cm], rowHeights=[1.0*cm])
         payment_table.setStyle(TableStyle([
             ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
@@ -461,7 +454,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # Ajustement sur 20 cm
         footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
         footer_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#001a70')),
@@ -624,7 +616,6 @@ def generate_school_list_pdf(
             ]
         ]
         
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau
         topbar_table = Table(topbar_data, colWidths=[7.0*cm, 6.0*cm, 7.0*cm], rowHeights=[0.65*cm])
         topbar_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -672,7 +663,6 @@ def generate_school_list_pdf(
             ]
         ]
         
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau
         title_table = Table(title_data, colWidths=[13.0*cm, 7.0*cm], rowHeights=[1.1*cm])
         title_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
@@ -721,7 +711,6 @@ def generate_school_list_pdf(
             ]
         ]
 
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
         client_table = Table(client_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.5*cm, 0.55*cm, 0.55*cm])
         client_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -765,7 +754,6 @@ def generate_school_list_pdf(
                         image_cell = RLImage(image_io, width=0.8*cm, height=1.1*cm)
                     elif product.image_url.startswith('http'):
                         try:
-                            # Ajout d'un timeout strict de 3 secondes pour ne pas figer le serveur
                             with urllib.request.urlopen(product.image_url, timeout=3) as response:
                                 image_io = io_module.BytesIO(response.read())
                                 image_cell = RLImage(image_io, width=0.8*cm, height=1.1*cm)
@@ -774,14 +762,12 @@ def generate_school_list_pdf(
                 except Exception as e:
                     print(f"⚠️ Erreur décodage image: {e}")
             
-            # Remplacer 'format_currency(prix)' par 'format_currency(item_total)'
             table_data.append([
                 Paragraph(str(idx), ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
                 image_cell,
                 Paragraph(product.titre[:40] + "..." if len(product.titre) > 40 else product.titre, ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_LEFT, leading=9)),
                 Paragraph(product.code, ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
                 Paragraph(str(item.quantite), ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
-                # ✅ FIX : Affiche désormais le total de la ligne au lieu du prix unitaire brut
                 Paragraph(f"<b>{format_currency(item_total)}</b>", ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#001a70'), fontName='Helvetica-Bold')),
                 Paragraph(product.code, ParagraphStyle('TD', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER, fontName='Courier', leading=8))
             ])
@@ -789,7 +775,6 @@ def generate_school_list_pdf(
         if len(table_data) == 1:
             elements.append(Paragraph("Aucun article dans cette liste", styles['Normal']))
         else:
-            # ✅ FIX : Pas de hauteur fixe de ligne ici pour permettre le retour automatique à la ligne des titres de livres s'ils sont longs
             table = Table(
                 table_data,
                 repeatRows=1,
@@ -843,7 +828,6 @@ def generate_school_list_pdf(
                 ]
             ]
             
-            # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
             occasion_table = Table(occasion_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
             occasion_table.setStyle(TableStyle([
                 ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
@@ -873,7 +857,6 @@ def generate_school_list_pdf(
                 ]
             ]
             
-            # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
             totals_table = Table(totals_data, colWidths=[14.0*cm, 6.0*cm], rowHeights=[0.6*cm, 0.6*cm, 0.6*cm])
             totals_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -910,7 +893,6 @@ def generate_school_list_pdf(
             ]
         ]
         
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
         payment_table = Table(payment_data, colWidths=[6.6*cm, 6.6*cm, 6.8*cm], rowHeights=[1.0*cm])
         payment_table.setStyle(TableStyle([
             ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
@@ -938,7 +920,6 @@ def generate_school_list_pdf(
             ]
         ]
         
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
         footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
         footer_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#001a70')),

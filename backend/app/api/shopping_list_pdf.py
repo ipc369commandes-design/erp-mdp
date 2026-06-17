@@ -30,6 +30,7 @@ class CartItem(BaseModel):
 
 class GeneratePDFRequest(BaseModel):
     items: List[CartItem]
+    discount_percent: Optional[float] = 0.0  # ✅ AJOUT : Reçoit le pourcentage de remise globale choisi (0% par défaut)
 
 # Initialisation du routeur générique pour le panier d'achats
 router = APIRouter()
@@ -378,9 +379,14 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             elements.append(occasion_table)
             elements.append(Spacer(1, 0.15*cm))
             
-            # ============= TOTALS SECTION (LIVE COMPUTED) =============
-            discount = int(round(subtotal * 0.05))
+            # ============= TOTALS SECTION (DYNAMIQUE) =============
+            # ✅ RECALCUL DYNAMIQUE : Récupération et application du pourcentage choisi
+            discount_percent = request.discount_percent if request.discount_percent is not None else 0.0
+            discount = int(round(subtotal * (discount_percent / 100.0)))
             final_total = subtotal - discount
+
+            # Libellé sans décimales inutiles pour un affichage propre (ex: 5% au lieu de 5.0%)
+            discount_label = f"{int(discount_percent)}%" if discount_percent.is_integer() else f"{discount_percent}%"
             
             totals_data = [
                 [
@@ -388,7 +394,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                     Paragraph(f"<b>{format_currency(subtotal)}</b>", ParagraphStyle('total_val', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_RIGHT, textColor=colors.white, leading=11))
                 ],
                 [
-                    Paragraph("<b>REMISE COMMERCIALE 5%</b>", ParagraphStyle('total_label', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=colors.HexColor('#111'), leading=11)),
+                    Paragraph(f"<b>REMISE COMMERCIALE {discount_label}</b>", ParagraphStyle('total_label', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=colors.HexColor('#111'), leading=11)),
                     Paragraph(f"<b>- {format_currency(discount)}</b>", ParagraphStyle('total_val', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_RIGHT, textColor=colors.HexColor('#111'), leading=11))
                 ],
                 [
