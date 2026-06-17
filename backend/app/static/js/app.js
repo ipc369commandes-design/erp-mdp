@@ -185,7 +185,7 @@ function createShoppingListModal() {
         });
     });
     
-    const pdfBtn = overlay.querySelector('#generateShoppingListPDF');
+    const pdfBtn = overlay.querySelector('#generatePdfBtn');
     if (pdfBtn) {
         pdfBtn.addEventListener('click', generateShoppingListPDF);
     }
@@ -1789,7 +1789,7 @@ async function openListItemsModal(listId) {
                         <input type="number" class="item-qty-input" value="${item.quantite}" min="1" style="width: 60px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px;">
                     </td>
                     <td class="center price">
-                        <!-- Input de saisie du Prix Unitaire forcé -->
+                        <!-- Input interactif de prix forcé intégré dans la maquette -->
                         <input type="number" class="item-price-input" value="${item.prix_force || ''}" placeholder="${product ? product.prix_vente : ''}" style="width: 100px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px; color: #001a70; font-size: 15px;">
                         <span style="font-size: 10px; display: block; color: #666; margin-top: 2px;">FCFA (Unitaire)</span>
                         
