@@ -185,7 +185,7 @@ function createShoppingListModal() {
         });
     });
     
-    const pdfBtn = overlay.querySelector('#generatePdfBtn');
+    const pdfBtn = overlay.querySelector('#generateShoppingListPDF');
     if (pdfBtn) {
         pdfBtn.addEventListener('click', generateShoppingListPDF);
     }
@@ -1339,12 +1339,24 @@ async function openListDetails(id) {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
 
-        let subtotal = 0;
+        let booksSubtotal = 0;
+        let stationerySubtotal = 0;
         let itemsHTML = '';
+
+        const isBook = (code, type_produit) => {
+            if (type_produit === 1 || type_produit === 6 || type_produit === '1' || type_produit === '6') return true;
+            if (code && (code.startsWith('978') || code.startsWith('979'))) return true;
+            return false;
+        };
 
         (data.items || []).forEach((item, idx) => {
             const itemTotal = (item.prix_unitaire || 0) * (item.quantite || 1); // ✅ Calcul du total de la ligne
-            subtotal += itemTotal;
+            
+            if (isBook(item.code, item.type_produit)) {
+                booksSubtotal += itemTotal;
+            } else {
+                stationerySubtotal += itemTotal;
+            }
 
             itemsHTML += `
             <tr>
@@ -1364,9 +1376,12 @@ async function openListDetails(id) {
             `;
         });
 
-        // Calcul live de la remise commerciale à 5 % identique aux PDF et à l'éditeur
-        const discount = Math.round(subtotal * 0.05);
-        const totalTtc = subtotal - discount;
+        // Calculs sélectifs initiaux
+        const subtotal = booksSubtotal + stationerySubtotal;
+        const booksDiscount = Math.round(booksSubtotal * 0.05);
+        const stationeryDiscount = Math.round(stationerySubtotal * 0.10);
+        const totalDiscount = booksDiscount + stationeryDiscount;
+        const totalTtc = subtotal - totalDiscount;
 
         overlay.innerHTML = `
         <div class="modal modal-fullscreen">
@@ -1463,17 +1478,21 @@ async function openListDetails(id) {
 
                     <!-- TOTAL -->
                     <div class="total-wrapper">
-                        <div class="total-box">
-                            <div class="total-line total-blue">
+                        <div class="total-box" style="width: 440px; border-radius: 12px; overflow: hidden; border: 2px solid #d8def0;">
+                            <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #001a70; color: white;">
                                 <span>TOTAL AVANT REMISE</span>
                                 <span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
                             </div>
-                            <div class="total-line total-yellow">
-                                <span>REMISE COMMERCIALE 5%</span>
-                                <span>- ${discount.toLocaleString('fr-FR')} FCFA</span>
+                            <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e; border-bottom: 1px solid #cbd5e1;">
+                                <span>REMISE SÉLECTIVE FOURNITURES 10%</span>
+                                <span>- ${stationeryDiscount.toLocaleString('fr-FR')} FCFA</span>
                             </div>
-                            <div class="total-line total-blue">
-                                <span>TOTAL TTC APRÈS REMISE</span>
+                            <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
+                                <span>REMISE SÉLECTIVE LIVRES 5%</span>
+                                <span>- ${booksDiscount.toLocaleString('fr-FR')} FCFA</span>
+                            </div>
+                            <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
+                                <span>TOTAL TTC FINAL</span>
                                 <span>${totalTtc.toLocaleString('fr-FR')} FCFA</span>
                             </div>
                         </div>
@@ -1719,18 +1738,40 @@ async function openListItemsModal(listId) {
             ? document.getElementById('schoolSelect').options[document.getElementById('schoolSelect').selectedIndex].text 
             : "Maison de la Presse Gabon";
 
+        // ✅ FONCTION UTILITAIRE INTERNE : Détecter si un produit est un livre (5% de remise) ou une fourniture (10%)
+        const isBook = (product) => {
+            if (!product) return true; // Sécurité par défaut (considéré comme livre)
+            
+            // Type 1 = Manuel Scolaire, Type 6 = Belles Lettres / Littérature générale [1]
+            if (product.type_produit === 1 || product.type_produit === 6 || product.type_produit === '1' || product.type_produit === '6') {
+                return true;
+            }
+            // Si le code commence par 978 ou 979, c'est forcément un livre (norme ISBN/EAN)
+            if (product.code && (product.code.startsWith('978') || product.code.startsWith('979'))) {
+                return true;
+            }
+            return false;
+        };
+
         let itemsHTML = '';
-        let subtotal = 0;
+        let booksSubtotal = 0;
+        let stationerySubtotal = 0;
 
         // Générer le tableau HTML dynamique en utilisant la maquette physique de l'impression
         items.forEach((item, idx) => {
             const product = products.find(p => p.id === item.product_id);
             const price = item.prix_force !== null && item.prix_force !== undefined ? item.prix_force : (product ? product.prix_vente : 0);
             const rowTotal = price * item.quantite;
-            subtotal += rowTotal;
+
+            // ✅ Répartition sélective des sous-totaux pour la remise initiale
+            if (isBook(product)) {
+                booksSubtotal += rowTotal;
+            } else {
+                stationerySubtotal += rowTotal;
+            }
 
             itemsHTML += `
-                <tr data-item-id="${item.id}">
+                <tr data-item-id="${item.id}" data-product-id="${item.product_id}">
                     <td class="center">
                         <div class="line-number">${idx + 1}</div>
                     </td>
@@ -1747,12 +1788,12 @@ async function openListItemsModal(listId) {
                         <!-- Input interactif de quantité intégré dans la maquette -->
                         <input type="number" class="item-qty-input" value="${item.quantite}" min="1" style="width: 60px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px;">
                     </td>
-                  <td class="center price">
+                    <td class="center price">
                         <!-- Input de saisie du Prix Unitaire forcé -->
                         <input type="number" class="item-price-input" value="${item.prix_force || ''}" placeholder="${product ? product.prix_vente : ''}" style="width: 100px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px; color: #001a70; font-size: 15px;">
                         <span style="font-size: 10px; display: block; color: #666; margin-top: 2px;">FCFA (Unitaire)</span>
                         
-                        <!-- ✅ AJOUT : Affichage dynamique du total de la ligne en fonction de la quantité -->
+                        <!-- Affichage dynamique du total de la ligne en fonction de la quantité -->
                         <div style="font-size: 13px; font-weight: bold; color: #001a70; margin-top: 5px; border-top: 1px dashed #cbd5e1; padding-top: 3px;">
                             Total: <span class="row-total-value">${rowTotal.toLocaleString('fr-FR')}</span> F
                         </div>
@@ -1764,8 +1805,12 @@ async function openListItemsModal(listId) {
             `;
         });
 
-        const discount = Math.round(subtotal * 0.05);
-        const totalTtc = subtotal - discount;
+        // Calculs sélectifs initiaux
+        const subtotal = booksSubtotal + stationerySubtotal;
+        const booksDiscount = Math.round(booksSubtotal * 0.05);
+        const stationeryDiscount = Math.round(stationerySubtotal * 0.10);
+        const totalDiscount = booksDiscount + stationeryDiscount;
+        const totalTtc = subtotal - totalDiscount;
 
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay items-modal-overlay';
@@ -1885,20 +1930,24 @@ async function openListItemsModal(listId) {
                             </div>
                         </div>
 
-                        <!-- TOTALS SECTION (LIVE PREVIEW) -->
+                        <!-- TOTALS SECTION (LIVE PREVIEW COORDONNÉE) -->
                         <div class="total-wrapper" style="display: flex; justify-content: flex-end; padding: 20px 35px; background: white;">
-                            <!-- ✅ Identifiant 'interactiveTotalBox' pour cibler la zone en JS lors de la saisie -->
-                            <div class="total-box" id="interactiveTotalBox" style="width: 380px; border-radius: 12px; overflow: hidden; border: 2px solid #d8def0;">
-                                <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #001a70; color: white;">
+                            <!-- ✅ Zone de calculs dynamique des remises sélectives 10% et 5% -->
+                            <div class="total-box" id="interactiveTotalBox" style="width: 440px; border-radius: 12px; overflow: hidden; border: 2px solid #d8def0;">
+                                <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #001a70; color: white;">
                                     <span>TOTAL AVANT REMISE</span>
                                     <span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
-                                <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                                    <span>REMISE COMMERCIALE 5%</span>
-                                    <span>- ${discount.toLocaleString('fr-FR')} FCFA</span>
+                                <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e; border-bottom: 1px solid #cbd5e1;">
+                                    <span>REMISE SÉLECTIVE FOURNITURES 10%</span>
+                                    <span>- ${stationeryDiscount.toLocaleString('fr-FR')} FCFA</span>
+                                </div>
+                                <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
+                                    <span>REMISE SÉLECTIVE LIVRES 5%</span>
+                                    <span>- ${booksDiscount.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
-                                    <span>TOTAL TTC APRÈS REMISE</span>
+                                    <span>TOTAL TTC FINAL</span>
                                     <span>${totalTtc.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                             </div>
@@ -1990,53 +2039,69 @@ async function openListItemsModal(listId) {
             }
         });
 
-        // ✅ FONCTION DE RECALCUL EN TEMPS RÉEL OPTIMISÉE (Gère le total de chaque ligne)
+        // ✅ RECALCUL DYNAMIQUE ET SÉLECTIF EN TEMPS RÉEL (5% Livres / 10% Fournitures)
         const recalculateTotals = () => {
-            let newSubtotal = 0;
+            let newBooksSubtotal = 0;
+            let newStationerySubtotal = 0;
             const rows = overlay.querySelectorAll('tbody tr');
             
             rows.forEach(row => {
                 const qtyInput = row.querySelector('.item-qty-input');
                 const priceInput = row.querySelector('.item-price-input');
                 const rowTotalValue = row.querySelector('.row-total-value');
+                const productId = row.getAttribute('data-product-id');
                 if (!qtyInput || !priceInput) return;
 
                 const qty = parseInt(qtyInput.value) || 1;
                 const price = parseFloat(priceInput.value) || parseFloat(priceInput.placeholder) || 0;
-                
                 const rowTotal = price * qty;
-                newSubtotal += rowTotal;
 
-                // ✅ Mettre à jour l'affichage du total de la ligne en temps réel
+                // Trouver le produit pour déterminer la catégorie sélective
+                const product = products.find(p => p.id == productId);
+
+                if (isBook(product)) {
+                    newBooksSubtotal += rowTotal;
+                } else {
+                    newStationerySubtotal += rowTotal;
+                }
+
+                // Mettre à jour l'affichage du total de la ligne
                 if (rowTotalValue) {
                     rowTotalValue.textContent = rowTotal.toLocaleString('fr-FR');
                 }
             });
 
-            const newDiscount = Math.round(newSubtotal * 0.05);
-            const newTotalTtc = newSubtotal - newDiscount;
+            const newSubtotal = newBooksSubtotal + newStationerySubtotal;
+            const newBooksDiscount = Math.round(newBooksSubtotal * 0.05);
+            const newStationeryDiscount = Math.round(newStationerySubtotal * 0.10);
+            const newTotalDiscount = newBooksDiscount + newStationeryDiscount;
+            const newTotalTtc = newSubtotal - newTotalDiscount;
 
             // Remplacer dynamiquement le contenu du panneau des totaux à l'écran
             const totalBox = overlay.querySelector('#interactiveTotalBox');
             if (totalBox) {
                 totalBox.innerHTML = `
-                    <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #001a70; color: white;">
+                    <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #001a70; color: white;">
                         <span>TOTAL AVANT REMISE</span>
                         <span>${newSubtotal.toLocaleString('fr-FR')} FCFA</span>
                     </div>
-                    <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                        <span>REMISE COMMERCIALE 5%</span>
-                        <span>- ${newDiscount.toLocaleString('fr-FR')} FCFA</span>
+                    <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e; border-bottom: 1px solid #cbd5e1;">
+                        <span>REMISE SÉLECTIVE FOURNITURES 10%</span>
+                        <span>- ${newStationeryDiscount.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                    <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
+                        <span>REMISE SÉLECTIVE LIVRES 5%</span>
+                        <span>- ${newBooksDiscount.toLocaleString('fr-FR')} FCFA</span>
                     </div>
                     <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
-                        <span>TOTAL TTC APRÈS REMISE</span>
+                        <span>TOTAL TTC FINAL</span>
                         <span>${newTotalTtc.toLocaleString('fr-FR')} FCFA</span>
                     </div>
                 `;
             }
         };
 
-        // ✅ Écouter en temps réel les changements de quantité et de prix forcé sur toute la table
+        // Écouter en temps réel les changements sur la table
         overlay.querySelectorAll('.item-qty-input, .item-price-input').forEach(input => {
             input.addEventListener('input', recalculateTotals);
         });
