@@ -13,8 +13,21 @@ const STATE = {
     schools: [],
     schoolYears: [],
     schoolLists: [],
-    selectedProductIdFromSearch: null
+    selectedProductIdFromSearch: null,
+    // Taux de remises par défaut modifiables dynamiquement
+    discountBooks: 5,
+    discountStationery: 10
 };
+
+// ============= FONCTIONS UTILITAIRES GLOBALES =============
+/**
+ * Détermine si un produit est un livre (remise Livres) ou une fourniture (remise Fournitures)
+ */
+function isBookProduct(code, type_produit) {
+    if (type_produit === 1 || type_produit === 6 || type_produit === '1' || type_produit === '6') return true;
+    if (code && (code.startsWith('978') || code.startsWith('979'))) return true;
+    return false;
+}
 
 // ============= INITIALISATION DE L'APPLICATION =============
 document.addEventListener('DOMContentLoaded', () => {
@@ -45,10 +58,21 @@ function loadShoppingList() {
             STATE.shoppingList = [];
         }
     }
+    // Charger également les remises personnalisées
+    const savedBooksDiscount = localStorage.getItem('discountBooks');
+    if (savedBooksDiscount !== null) {
+        STATE.discountBooks = parseInt(savedBooksDiscount) || 5;
+    }
+    const savedStationeryDiscount = localStorage.getItem('discountStationery');
+    if (savedStationeryDiscount !== null) {
+        STATE.discountStationery = parseInt(savedStationeryDiscount) || 10;
+    }
 }
 
 function saveShoppingList() {
     localStorage.setItem('shoppingList', JSON.stringify(STATE.shoppingList));
+    localStorage.setItem('discountBooks', STATE.discountBooks);
+    localStorage.setItem('discountStationery', STATE.discountStationery);
 }
 
 function addToShoppingList(product) {
@@ -89,11 +113,17 @@ function createShoppingListModal() {
     overlay.className = 'modal-overlay shopping-list-overlay';
     
     let itemsHTML = '';
-    let subtotal = 0;
+    let booksSubtotal = 0;
+    let stationerySubtotal = 0;
     
     STATE.shoppingList.forEach((item, index) => {
         const itemTotal = (item.prix_vente || 0) * item.qty;
-        subtotal += itemTotal;
+        
+        if (isBookProduct(item.code, item.type_produit)) {
+            booksSubtotal += itemTotal;
+        } else {
+            stationerySubtotal += itemTotal;
+        }
         
         const imageUrl = item.image_url || 'https://via.placeholder.com/50?text=No+Image';
         
@@ -116,6 +146,11 @@ function createShoppingListModal() {
         `;
     });
     
+    const subtotal = booksSubtotal + stationerySubtotal;
+    const booksDiscountValue = Math.round(booksSubtotal * (STATE.discountBooks / 100));
+    const stationeryDiscountValue = Math.round(stationerySubtotal * (STATE.discountStationery / 100));
+    const totalTtc = subtotal - (booksDiscountValue + stationeryDiscountValue);
+
     overlay.innerHTML = `
         <div class="modal" style="max-width: 900px;">
             <div class="modal-header">
@@ -142,17 +177,33 @@ function createShoppingListModal() {
                 
                 ${STATE.shoppingList.length > 0 ? `
                     <div style="margin-top: 30px; text-align: right;">
-                        <div style="font-size: 18px; margin-bottom: 10px;">
+                        <div style="font-size: 18px; margin-bottom: 15px;">
                             <strong>Sous-total Fournitures Scolaires:</strong> ${subtotal.toLocaleString('fr-FR')} FCFA
                         </div>
-                        <div style="font-size: 18px; margin-bottom: 10px; color: #999999;">
-                            <strong>Remise Indicative Fournitures 10%:</strong> (-10%)
+                        
+                        <!-- Configuration interactive des remises du panier -->
+                        <div style="display: flex; justify-content: flex-end; gap: 20px; margin-bottom: 15px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-size: 14px;"><strong>Remise Fournitures :</strong></label>
+                                <input type="number" id="cartDiscountStationery" class="discount-input" value="${STATE.discountStationery}" min="0" max="100" style="width: 60px; padding: 5px; text-align: center; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 4px;">
+                                <span style="font-size: 14px; font-weight: bold;">%</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-size: 14px;"><strong>Remise Livres :</strong></label>
+                                <input type="number" id="cartDiscountBooks" class="discount-input" value="${STATE.discountBooks}" min="0" max="100" style="width: 60px; padding: 5px; text-align: center; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 4px;">
+                                <span style="font-size: 14px; font-weight: bold;">%</span>
+                            </div>
                         </div>
-                        <div style="font-size: 18px; margin-bottom: 10px; color: #999999;">
-                            <strong>Remise Indicative Livres 5%:</strong> (-5%)
+
+                        <div style="font-size: 16px; margin-bottom: 8px; color: #64748b;">
+                            <strong>Remise Appliquée Fournitures (${STATE.discountStationery}%) :</strong> -${stationeryDiscountValue.toLocaleString('fr-FR')} FCFA
                         </div>
+                        <div style="font-size: 16px; margin-bottom: 15px; color: #64748b;">
+                            <strong>Remise Appliquée Livres (${STATE.discountBooks}%) :</strong> -${booksDiscountValue.toLocaleString('fr-FR')} FCFA
+                        </div>
+                        
                         <div style="font-size: 24px; color: #001a70; padding: 15px; background: #f2b300; border-radius: 8px; width: fit-content; margin-left: auto;">
-                            <strong>Total TTC Final:</strong> ${subtotal.toLocaleString('fr-FR')} FCFA
+                            <strong>Total TTC Final:</strong> ${totalTtc.toLocaleString('fr-FR')} FCFA
                         </div>
                     </div>
                 ` : ''}
@@ -170,6 +221,21 @@ function createShoppingListModal() {
             const index = parseInt(e.target.dataset.index);
             const newQty = parseInt(e.target.value) || 1;
             STATE.shoppingList[index].qty = Math.max(1, newQty);
+            saveShoppingList();
+            openShoppingListModal();
+        });
+    });
+
+    // Prise en compte des modifications de pourcentages du panier
+    overlay.querySelectorAll('.discount-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const val = parseInt(e.target.value) || 0;
+            const cleanVal = Math.max(0, Math.min(100, val));
+            if (e.target.id === 'cartDiscountBooks') {
+                STATE.discountBooks = cleanVal;
+            } else if (e.target.id === 'cartDiscountStationery') {
+                STATE.discountStationery = cleanVal;
+            }
             saveShoppingList();
             openShoppingListModal();
         });
@@ -198,7 +264,11 @@ async function generateShoppingListPDF() {
         const response = await fetch(`${CONFIG.API_BASE}/generate-pdf`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: STATE.shoppingList })
+            body: JSON.stringify({ 
+                items: STATE.shoppingList,
+                discount_books: STATE.discountBooks,
+                discount_stationery: STATE.discountStationery
+            })
         });
 
         if (!response.ok) throw new Error('Erreur lors de la génération du PDF');
@@ -1343,16 +1413,10 @@ async function openListDetails(id) {
         let stationerySubtotal = 0;
         let itemsHTML = '';
 
-        const isBook = (code, type_produit) => {
-            if (type_produit === 1 || type_produit === 6 || type_produit === '1' || type_produit === '6') return true;
-            if (code && (code.startsWith('978') || code.startsWith('979'))) return true;
-            return false;
-        };
-
         (data.items || []).forEach((item, idx) => {
             const itemTotal = (item.prix_unitaire || 0) * (item.quantite || 1); // ✅ Calcul du total de la ligne
             
-            if (isBook(item.code, item.type_produit)) {
+            if (isBookProduct(item.code, item.type_produit)) {
                 booksSubtotal += itemTotal;
             } else {
                 stationerySubtotal += itemTotal;
@@ -1369,17 +1433,16 @@ async function openListDetails(id) {
                 </td>
                 <td class="center" style="font-family: monospace; font-size: 14px;">${item.code || 'N/A'}</td>
                 <td class="center">${item.quantite || 1}</td>
-                <!-- ✅ Affiche le prix total de la ligne (ex: si quantité = 2, affiche le total de ces 2 livres) -->
                 <td class="center price">${itemTotal.toLocaleString('fr-FR')}</td>
                 <td class="center barcode">${item.code || 'N/A'}</td>
             </tr>
             `;
         });
 
-        // Calculs sélectifs initiaux
+        // Calculs basés sur les pourcentages définis dans STATE
         const subtotal = booksSubtotal + stationerySubtotal;
-        const booksDiscount = Math.round(booksSubtotal * 0.05);
-        const stationeryDiscount = Math.round(stationerySubtotal * 0.10);
+        const booksDiscount = Math.round(booksSubtotal * (STATE.discountBooks / 100));
+        const stationeryDiscount = Math.round(stationerySubtotal * (STATE.discountStationery / 100));
         const totalDiscount = booksDiscount + stationeryDiscount;
         const totalTtc = subtotal - totalDiscount;
 
@@ -1484,11 +1547,11 @@ async function openListDetails(id) {
                                 <span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
                             </div>
                             <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e; border-bottom: 1px solid #cbd5e1;">
-                                <span>REMISE SÉLECTIVE FOURNITURES 10%</span>
+                                <span>REMISE SÉLECTIVE FOURNITURES ${STATE.discountStationery}%</span>
                                 <span>- ${stationeryDiscount.toLocaleString('fr-FR')} FCFA</span>
                             </div>
                             <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                                <span>REMISE SÉLECTIVE LIVRES 5%</span>
+                                <span>REMISE SÉLECTIVE LIVRES ${STATE.discountBooks}%</span>
                                 <span>- ${booksDiscount.toLocaleString('fr-FR')} FCFA</span>
                             </div>
                             <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
@@ -1733,25 +1796,10 @@ async function openListItemsModal(listId) {
         const listDetailsRes = await fetch(`${CONFIG.API_BASE}/school-lists/${listId}/details`);
         const listDetails = await listDetailsRes.json();
 
-        // Récupérer le nom de l'école (on l'extrait ou on l'affiche de façon sécurisée)
+        // Récupérer le nom de l'école de façon sécurisée
         const schoolName = document.getElementById('schoolSelect') 
             ? document.getElementById('schoolSelect').options[document.getElementById('schoolSelect').selectedIndex].text 
             : "Maison de la Presse Gabon";
-
-        // ✅ FONCTION UTILITAIRE INTERNE : Détecter si un produit est un livre (5% de remise) ou une fourniture (10%)
-        const isBook = (product) => {
-            if (!product) return true; // Sécurité par défaut (considéré comme livre)
-            
-            // Type 1 = Manuel Scolaire, Type 6 = Belles Lettres / Littérature générale [1]
-            if (product.type_produit === 1 || product.type_produit === 6 || product.type_produit === '1' || product.type_produit === '6') {
-                return true;
-            }
-            // Si le code commence par 978 ou 979, c'est forcément un livre (norme ISBN/EAN)
-            if (product.code && (product.code.startsWith('978') || product.code.startsWith('979'))) {
-                return true;
-            }
-            return false;
-        };
 
         let itemsHTML = '';
         let booksSubtotal = 0;
@@ -1763,8 +1811,8 @@ async function openListItemsModal(listId) {
             const price = item.prix_force !== null && item.prix_force !== undefined ? item.prix_force : (product ? product.prix_vente : 0);
             const rowTotal = price * item.quantite;
 
-            // ✅ Répartition sélective des sous-totaux pour la remise initiale
-            if (isBook(product)) {
+            // Répartition sélective des sous-totaux pour la remise initiale
+            if (product && isBookProduct(product.code, product.type_produit)) {
                 booksSubtotal += rowTotal;
             } else {
                 stationerySubtotal += rowTotal;
@@ -1805,10 +1853,10 @@ async function openListItemsModal(listId) {
             `;
         });
 
-        // Calculs sélectifs initiaux
+        // Calculs basés sur les pourcentages définis dans STATE
         const subtotal = booksSubtotal + stationerySubtotal;
-        const booksDiscount = Math.round(booksSubtotal * 0.05);
-        const stationeryDiscount = Math.round(stationerySubtotal * 0.10);
+        const booksDiscount = Math.round(booksSubtotal * (STATE.discountBooks / 100));
+        const stationeryDiscount = Math.round(stationerySubtotal * (STATE.discountStationery / 100));
         const totalDiscount = booksDiscount + stationeryDiscount;
         const totalTtc = subtotal - totalDiscount;
 
@@ -1836,6 +1884,22 @@ async function openListItemsModal(listId) {
                             <button class="btn btn-primary" id="addAndRefreshBtn" style="padding: 12px 20px; width: 100%;">➕ Ajouter</button>
                             <button class="btn btn-info" id="importPlatformBtn" style="padding: 12px 20px; width: 100%;">🔄 Importer Plateforme</button>
                         </div>
+                        
+                        <!-- ✅ SECTION INTERACTIVE : Configuration directe des remises de cette liste -->
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1.5px dashed #cbd5e1; display: flex; gap: 20px; align-items: center;">
+                            <span style="font-weight: bold; color: #001a70; font-size: 14px;">⚙️ Configuration des remises de la liste :</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-size: 13px;">Remise Livres :</label>
+                                <input type="number" id="listDiscountBooks" value="${STATE.discountBooks}" min="0" max="100" style="width: 70px; padding: 6px; border: 1.5px solid #d8def0; border-radius: 8px; text-align: center; font-weight: bold;">
+                                <span style="font-weight: bold; color: #001a70;">%</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-size: 13px;">Remise Fournitures :</label>
+                                <input type="number" id="listDiscountStationery" value="${STATE.discountStationery}" min="0" max="100" style="width: 70px; padding: 6px; border: 1.5px solid #d8def0; border-radius: 8px; text-align: center; font-weight: bold;">
+                                <span style="font-weight: bold; color: #001a70;">%</span>
+                            </div>
+                        </div>
+
                         <div id="selectedProductInfo" style="margin-top: 12px; padding: 10px; background: #e8f4f8; border-radius: 6px; display: none; border-left: 4px solid #3b82f6;"></div>
                     </div>
 
@@ -1932,18 +1996,18 @@ async function openListItemsModal(listId) {
 
                         <!-- TOTALS SECTION (LIVE PREVIEW COORDONNÉE) -->
                         <div class="total-wrapper" style="display: flex; justify-content: flex-end; padding: 20px 35px; background: white;">
-                            <!-- ✅ Zone de calculs dynamique des remises sélectives 10% et 5% -->
+                            <!-- Zone de calculs dynamique des remises sélectives variables -->
                             <div class="total-box" id="interactiveTotalBox" style="width: 440px; border-radius: 12px; overflow: hidden; border: 2px solid #d8def0;">
                                 <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #001a70; color: white;">
                                     <span>TOTAL AVANT REMISE</span>
                                     <span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e; border-bottom: 1px solid #cbd5e1;">
-                                    <span>REMISE SÉLECTIVE FOURNITURES 10%</span>
+                                    <span>REMISE SÉLECTIVE FOURNITURES ${STATE.discountStationery}%</span>
                                     <span>- ${stationeryDiscount.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                                    <span>REMISE SÉLECTIVE LIVRES 5%</span>
+                                    <span>REMISE SÉLECTIVE LIVRES ${STATE.discountBooks}%</span>
                                     <span>- ${booksDiscount.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
@@ -2039,11 +2103,23 @@ async function openListItemsModal(listId) {
             }
         });
 
-        // ✅ RECALCUL DYNAMIQUE ET SÉLECTIF EN TEMPS RÉEL (5% Livres / 10% Fournitures)
+        // ✅ RECALCUL DYNAMIQUE ET SÉLECTIF EN TEMPS RÉEL (Modifiable par l'utilisateur)
         const recalculateTotals = () => {
             let newBooksSubtotal = 0;
             let newStationerySubtotal = 0;
             const rows = overlay.querySelectorAll('tbody tr');
+            
+            // Récupération des remises saisies à la volée
+            const listDiscountBooksInput = overlay.querySelector('#listDiscountBooks');
+            const listDiscountStationeryInput = overlay.querySelector('#listDiscountStationery');
+            
+            const currentDiscountBooks = listDiscountBooksInput ? (parseFloat(listDiscountBooksInput.value) || 0) : STATE.discountBooks;
+            const currentDiscountStationery = listDiscountStationeryInput ? (parseFloat(listDiscountStationeryInput.value) || 0) : STATE.discountStationery;
+            
+            // Sauvegarde dans le STATE pour assurer la cohérence globale
+            STATE.discountBooks = currentDiscountBooks;
+            STATE.discountStationery = currentDiscountStationery;
+            saveShoppingList(); // Persiste localement
             
             rows.forEach(row => {
                 const qtyInput = row.querySelector('.item-qty-input');
@@ -2059,7 +2135,7 @@ async function openListItemsModal(listId) {
                 // Trouver le produit pour déterminer la catégorie sélective
                 const product = products.find(p => p.id == productId);
 
-                if (isBook(product)) {
+                if (product && isBookProduct(product.code, product.type_produit)) {
                     newBooksSubtotal += rowTotal;
                 } else {
                     newStationerySubtotal += rowTotal;
@@ -2072,8 +2148,8 @@ async function openListItemsModal(listId) {
             });
 
             const newSubtotal = newBooksSubtotal + newStationerySubtotal;
-            const newBooksDiscount = Math.round(newBooksSubtotal * 0.05);
-            const newStationeryDiscount = Math.round(newStationerySubtotal * 0.10);
+            const newBooksDiscount = Math.round(newBooksSubtotal * (currentDiscountBooks / 100));
+            const newStationeryDiscount = Math.round(newStationerySubtotal * (currentDiscountStationery / 100));
             const newTotalDiscount = newBooksDiscount + newStationeryDiscount;
             const newTotalTtc = newSubtotal - newTotalDiscount;
 
@@ -2086,11 +2162,11 @@ async function openListItemsModal(listId) {
                         <span>${newSubtotal.toLocaleString('fr-FR')} FCFA</span>
                     </div>
                     <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e; border-bottom: 1px solid #cbd5e1;">
-                        <span>REMISE SÉLECTIVE FOURNITURES 10%</span>
+                        <span>REMISE SÉLECTIVE FOURNITURES ${currentDiscountStationery}%</span>
                         <span>- ${newStationeryDiscount.toLocaleString('fr-FR')} FCFA</span>
                     </div>
                     <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                        <span>REMISE SÉLECTIVE LIVRES 5%</span>
+                        <span>REMISE SÉLECTIVE LIVRES ${currentDiscountBooks}%</span>
                         <span>- ${newBooksDiscount.toLocaleString('fr-FR')} FCFA</span>
                     </div>
                     <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
@@ -2101,8 +2177,8 @@ async function openListItemsModal(listId) {
             }
         };
 
-        // Écouter en temps réel les changements sur la table
-        overlay.querySelectorAll('.item-qty-input, .item-price-input').forEach(input => {
+        // Écouter en temps réel les changements sur les quantités, prix et sur les taux de remise
+        overlay.querySelectorAll('.item-qty-input, .item-price-input, #listDiscountBooks, #listDiscountStationery').forEach(input => {
             input.addEventListener('input', recalculateTotals);
         });
 
@@ -2232,7 +2308,8 @@ async function deleteListItem(itemId, listId) {
 
 async function generateListPDF(id) {
     try {
-        const response = await fetch(`${CONFIG.API_BASE}/school-lists-pdf/${id}/pdf`);
+        // Envoi des remises choisies en paramètre d'URL au serveur pour aligner le PDF généré
+        const response = await fetch(`${CONFIG.API_BASE}/school-lists-pdf/${id}/pdf?discount_books=${STATE.discountBooks}&discount_stationery=${STATE.discountStationery}`);
         if (!response.ok) throw new Error('Erreur de génération');
 
         const blob = await response.blob();
@@ -2243,7 +2320,7 @@ async function generateListPDF(id) {
         a.click();
         window.URL.revokeObjectURL(url);
     } catch (error) {
-        alert('❌ Erreur de génération du PDF: ' + message);
+        alert('❌ Erreur de génération du PDF: ' + error.message);
     }
 }
 

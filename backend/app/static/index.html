@@ -75,9 +75,10 @@
                             ⚙️ Lancer la synchronisation
                         </button>
 
+                        <!-- Modification de classe : stop-sync-btn -> btn btn-danger -->
                         <button
                             id="stopSyncBtn"
-                            class="stop-sync-btn hidden">
+                            class="btn btn-danger hidden">
                             ⛔ Arrêter
                         </button>
 
@@ -91,12 +92,12 @@
 
                 </div>
 
-                <!-- ✅ AJOUT : Bouton d'activation des filtres -->
+                <!-- Bouton d'activation des filtres -->
                 <div class="filters-toggle">
                     <button id="toggleFilters" class="toggle-btn">⚙️ Filtres avancés</button>
                 </div>
 
-                <!-- ✅ AJOUT : Panneau des filtres avancés (masqué par défaut) -->
+                <!-- Panneau des filtres avancés (masqué par défaut) -->
                 <div id="filtersPanel" class="filters-panel hidden">
                     <div class="filter-group">
                         <label for="minPrice">Prix minimum (FCFA)</label>
@@ -120,7 +121,6 @@
 
             </header>
 
-            <!-- Remplacement de main par une div class="page-body" -->
             <div class="page-body">
 
                 <div id="loading" class="loading">Chargement...</div>
@@ -169,7 +169,8 @@
 </div>
 
 <!-- ================= MODAL SYNCHRONISATION ================= -->
-<div id="syncModal" class="sync-modal hidden">
+<!-- Modification de classe : ajout de modal-overlay pour assurer l'ombrage et le centrage -->
+<div id="syncModal" class="modal-overlay sync-modal hidden">
 
     <div class="sync-modal-content" id="syncModalContent">
 
@@ -199,8 +200,9 @@
 
             <div id="syncLogs" class="sync-logs"></div>
 
-            <div class="sync-modal-actions">
-                <button id="stopSyncBtnModal" class="stop-sync-btn">
+            <div class="sync-modal-actions" style="margin-top: 15px; text-align: right;">
+                <!-- Modification de classe : stop-sync-btn -> btn btn-danger -->
+                <button id="stopSyncBtnModal" class="btn btn-danger">
                     ⛔ Arrêter la synchronisation
                 </button>
             </div>

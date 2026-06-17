@@ -711,6 +711,52 @@ header h1 {
 }
 
 /* ==========================================================================
+   7.1 CORRECTIFS VISUELS : INPUTS SUR FOND CLAIR (MODALES INTERACTIVES)
+   ========================================================================== */
+/* 
+   Corrige le problème de texte blanc invisible sur fond clair dans les zones
+   d'administration blanches ou bleu clair des modales de valorisation.
+*/
+.modal-body input[type="text"]:not(.search-input),
+.modal-body input[type="number"]:not(.discount-input) {
+    background-color: #ffffff !important;
+    color: #0f172a !important; /* Force le texte sombre */
+    border: 1.5px solid #cbd5e1 !important;
+}
+
+.modal-body input[type="text"]:not(.search-input):focus,
+.modal-body input[type="number"]:not(.discount-input):focus {
+    border-color: var(--primary) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15) !important;
+}
+
+/* Style spécifique pour les inputs de remises globaux du panier (thème sombre) */
+.discount-input {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    transition: all 0.2s ease;
+}
+.discount-input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.25) !important;
+}
+
+/* Style de la boîte de résultats de recherche de produit interactive sur fond clair */
+#productSearchResults {
+    background: #ffffff !important;
+    border: 1px solid #d8def0 !important;
+}
+#productSearchResults .search-result-item {
+    color: #1e293b !important;
+    transition: background 0.2s ease;
+}
+#productSearchResults .search-result-item:hover {
+    background: #f1f5f9 !important;
+}
+
+/* ==========================================================================
    8. MAQUETTE ET APERÇU PAPIER (Preview d'Impression Haute Fidélité)
    ========================================================================== */
 /* 
@@ -730,6 +776,17 @@ header h1 {
     overflow: hidden;
     font-family: 'Inter', Arial, sans-serif;
     text-align: left;
+}
+
+/* ✅ CORRECTIF SPÉCIFIQUE : Forçage des éléments interactifs internes de la maquette papier */
+.page-list-details input {
+    background-color: #ffffff !important;
+    color: #111111 !important; /* Texte bien noir pour la maquette */
+    border: 1.5px solid #cbd5e1 !important;
+}
+.page-list-details input:focus {
+    border-color: #001a70 !important;
+    box-shadow: 0 0 0 2px rgba(0, 26, 112, 0.15) !important;
 }
 
 .page-list-details .header {
