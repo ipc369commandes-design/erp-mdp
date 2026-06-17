@@ -1343,7 +1343,9 @@ async function openListDetails(id) {
         let itemsHTML = '';
 
         (data.items || []).forEach((item, idx) => {
-            subtotal += item.total || 0;
+            const itemTotal = (item.prix_unitaire || 0) * (item.quantite || 1); // ✅ Calcul du total de la ligne
+            subtotal += itemTotal;
+
             itemsHTML += `
             <tr>
                 <td class="center"><div class="line-number">${idx + 1}</div></td>
@@ -1355,7 +1357,8 @@ async function openListDetails(id) {
                 </td>
                 <td class="center" style="font-family: monospace; font-size: 14px;">${item.code || 'N/A'}</td>
                 <td class="center">${item.quantite || 1}</td>
-                <td class="center price">${(item.prix_unitaire || 0).toLocaleString('fr-FR')}</td>
+                <!-- ✅ Affiche le prix total de la ligne (ex: si quantité = 2, affiche le total de ces 2 livres) -->
+                <td class="center price">${itemTotal.toLocaleString('fr-FR')}</td>
                 <td class="center barcode">${item.code || 'N/A'}</td>
             </tr>
             `;
@@ -1744,10 +1747,15 @@ async function openListItemsModal(listId) {
                         <!-- Input interactif de quantité intégré dans la maquette -->
                         <input type="number" class="item-qty-input" value="${item.quantite}" min="1" style="width: 60px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px;">
                     </td>
-                    <td class="center price">
-                        <!-- Input interactif de prix forcé intégré dans la maquette -->
-                        <input type="number" class="item-price-input" value="${item.prix_force || ''}" placeholder="${product ? product.prix_vente : ''}" style="width: 100px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px; color: #001a70; font-size: 16px;">
-                        <span style="font-size: 11px; display: block; color: #666; margin-top: 2px;">FCFA</span>
+                  <td class="center price">
+                        <!-- Input de saisie du Prix Unitaire forcé -->
+                        <input type="number" class="item-price-input" value="${item.prix_force || ''}" placeholder="${product ? product.prix_vente : ''}" style="width: 100px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px; color: #001a70; font-size: 15px;">
+                        <span style="font-size: 10px; display: block; color: #666; margin-top: 2px;">FCFA (Unitaire)</span>
+                        
+                        <!-- ✅ AJOUT : Affichage dynamique du total de la ligne en fonction de la quantité -->
+                        <div style="font-size: 13px; font-weight: bold; color: #001a70; margin-top: 5px; border-top: 1px dashed #cbd5e1; padding-top: 3px;">
+                            Total: <span class="row-total-value">${rowTotal.toLocaleString('fr-FR')}</span> F
+                        </div>
                     </td>
                     <td class="center">
                         <button class="btn btn-danger btn-sm btn-delete-item-row" data-item-id="${item.id}" style="padding: 6px 12px; font-size: 12px; border-radius: 6px;">🗑️ Retirer</button>
@@ -1982,7 +1990,7 @@ async function openListItemsModal(listId) {
             }
         });
 
-        // ✅ FONCTION DE RECALCUL EN TEMPS RÉEL (REAL-TIME COMPUTATION)
+        // ✅ FONCTION DE RECALCUL EN TEMPS RÉEL OPTIMISÉE (Gère le total de chaque ligne)
         const recalculateTotals = () => {
             let newSubtotal = 0;
             const rows = overlay.querySelectorAll('tbody tr');
@@ -1990,13 +1998,19 @@ async function openListItemsModal(listId) {
             rows.forEach(row => {
                 const qtyInput = row.querySelector('.item-qty-input');
                 const priceInput = row.querySelector('.item-price-input');
+                const rowTotalValue = row.querySelector('.row-total-value');
                 if (!qtyInput || !priceInput) return;
 
                 const qty = parseInt(qtyInput.value) || 1;
-                // Si le champ de prix forcé est vide, on prend la valeur d'origine du placeholder (prix catalogue)
                 const price = parseFloat(priceInput.value) || parseFloat(priceInput.placeholder) || 0;
                 
-                newSubtotal += price * qty;
+                const rowTotal = price * qty;
+                newSubtotal += rowTotal;
+
+                // ✅ Mettre à jour l'affichage du total de la ligne en temps réel
+                if (rowTotalValue) {
+                    rowTotalValue.textContent = rowTotal.toLocaleString('fr-FR');
+                }
             });
 
             const newDiscount = Math.round(newSubtotal * 0.05);

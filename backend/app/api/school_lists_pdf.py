@@ -774,13 +774,15 @@ def generate_school_list_pdf(
                 except Exception as e:
                     print(f"⚠️ Erreur décodage image: {e}")
             
+            # Remplacer 'format_currency(prix)' par 'format_currency(item_total)'
             table_data.append([
                 Paragraph(str(idx), ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
                 image_cell,
                 Paragraph(product.titre[:40] + "..." if len(product.titre) > 40 else product.titre, ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_LEFT, leading=9)),
                 Paragraph(product.code, ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
                 Paragraph(str(item.quantite), ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
-                Paragraph(f"<b>{float(prix):,.0f}</b>", ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#001a70'), fontName='Helvetica-Bold')),
+                # ✅ FIX : Affiche désormais le total de la ligne au lieu du prix unitaire brut
+                Paragraph(f"<b>{format_currency(item_total)}</b>", ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#001a70'), fontName='Helvetica-Bold')),
                 Paragraph(product.code, ParagraphStyle('TD', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER, fontName='Courier', leading=8))
             ])
         

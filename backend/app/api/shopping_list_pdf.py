@@ -24,7 +24,7 @@ class CartItem(BaseModel):
     id: int
     code: str
     titre: str
-    prix_vente: float
+    prix_vente: Optional[float] = None  # Sécurisé pour accepter des prix vides
     qty: int
     image_url: Optional[str] = None
 
@@ -35,15 +35,16 @@ class GeneratePDFRequest(BaseModel):
 router = APIRouter()
 
 
-def format_currency(value: float) -> str:
+def format_currency(value: Optional[float]) -> str:
     """Formater un montant numérique au format monétaire français (ex: 39 975 FCFA)"""
-    return f"{value:,.0f}".replace(",", " ") + " FCFA"
+    val_float = float(value) if value is not None else 0.0
+    return f"{val_float:,.0f}".replace(",", " ") + " FCFA"
 
 
 # ============= ROUTE POST: GÉNÉRER PDF DEPUIS LE PANIER =============
 @router.post("/generate-pdf")
 def generate_pdf_from_cart(request: GeneratePDFRequest):
-    """Générer un PDF depuis le panier (articles du localStorage)"""
+    """Générer un PDF depuis le panier (articles du localStorage) - Sécurisé"""
     
     try:
         # Créer le PDF
@@ -149,7 +150,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+        # Ajustement sur 20 cm
         topbar_table = Table(topbar_data, colWidths=[7.0*cm, 6.0*cm, 7.0*cm], rowHeights=[0.65*cm])
         topbar_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -195,7 +196,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+        # Ajustement sur 20 cm
         title_table = Table(title_data, colWidths=[13.0*cm, 7.0*cm], rowHeights=[1.1*cm])
         title_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
@@ -219,7 +220,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             leading=10,
             backColor=colors.HexColor('#001a70')
         )
-        
+
         client_content_style = ParagraphStyle(
             'ClientContent',
             parent=styles['Normal'],
@@ -228,7 +229,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             textColor=colors.HexColor('#111'),
             leading=9
         )
-        
+
         client_data = [
             [
                 Paragraph("CLIENT", client_header_style),
@@ -243,8 +244,8 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 Paragraph("Observations : _______________________", client_content_style)
             ]
         ]
-        
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+
+        # Ajustement sur 20 cm
         client_table = Table(client_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.5*cm, 0.55*cm, 0.55*cm])
         client_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -273,7 +274,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
         subtotal = 0
         
         for idx, item in enumerate(request.items, 1):
-            prix = item.prix_vente
+            prix = item.prix_vente if item.prix_vente is not None else 0.0
             item_total = float(prix) * item.qty
             subtotal += item_total
             
@@ -296,20 +297,22 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 except Exception as e:
                     print(f"Erreur image: {e}")
             
+            # ✅ FIX : Utilisation de 'item' au lieu de 'product' pour éviter le NameError
             table_data.append([
                 Paragraph(str(idx), ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
                 image_cell,
                 Paragraph(item.titre[:40] + "..." if len(item.titre) > 40 else item.titre, ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_LEFT, leading=9)),
                 Paragraph(item.code, ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
                 Paragraph(str(item.qty), ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
-                Paragraph(f"<b>{float(prix):,.0f}</b>", ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#001a70'), fontName='Helvetica-Bold')),
+                # ✅ FIX : Affichage dynamique du total de la ligne formaté
+                Paragraph(f"<b>{format_currency(item_total)}</b>", ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#001a70'), fontName='Helvetica-Bold')),
                 Paragraph(item.code, ParagraphStyle('TD', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER, fontName='Courier', leading=8))
             ])
         
         if len(table_data) == 1:
             elements.append(Paragraph("Aucun article dans cette liste", styles['Normal']))
         else:
-            # ✅ FIX : Pas de hauteur fixe de ligne ici pour permettre le retour automatique à la ligne des titres de livres s'ils sont longs
+            # Ajustement sur 20 cm
             table = Table(
                 table_data,
                 repeatRows=1,
@@ -363,7 +366,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ]
             ]
             
-            # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+            # Ajustement sur 20 cm
             occasion_table = Table(occasion_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
             occasion_table.setStyle(TableStyle([
                 ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
@@ -375,7 +378,6 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             elements.append(Spacer(1, 0.15*cm))
             
             # ============= TOTALS SECTION (LIVE COMPUTED) =============
-            # ✅ FIX : Calcul Python natif à la place de Math.round (Javascript)
             discount = int(round(subtotal * 0.05))
             final_total = subtotal - discount
             
@@ -394,7 +396,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ]
             ]
             
-            # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+            # Ajustement sur 20 cm
             totals_table = Table(totals_data, colWidths=[14.0*cm, 6.0*cm], rowHeights=[0.6*cm, 0.6*cm, 0.6*cm])
             totals_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#001a70')),
@@ -431,7 +433,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+        # Ajustement sur 20 cm
         payment_table = Table(payment_data, colWidths=[6.6*cm, 6.6*cm, 6.8*cm], rowHeights=[1.0*cm])
         payment_table.setStyle(TableStyle([
             ('BORDER', (0, 0), (-1, -1), 1, colors.HexColor('#d8def0')),
@@ -459,7 +461,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             ]
         ]
         
-        # ✅ FIX : rowHeights défini proprement dans la construction du tableau (Ajustement sur 20 cm)
+        # Ajustement sur 20 cm
         footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
         footer_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#001a70')),
