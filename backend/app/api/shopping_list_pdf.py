@@ -24,7 +24,7 @@ class CartItem(BaseModel):
     id: int
     code: str
     titre: str
-    prix_vente: Optional[float] = None  # Sécurisé pour accepter des prix vides
+    prix_vente: Optional[float] = None  # ✅ Sécurisé pour accepter des prix vides du localStorage
     qty: int
     image_url: Optional[str] = None
 
@@ -274,6 +274,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
         subtotal = 0
         
         for idx, item in enumerate(request.items, 1):
+            # ✅ FIX : Sécurisation si le prix de vente d'un élément du panier est nul
             prix = item.prix_vente if item.prix_vente is not None else 0.0
             item_total = float(prix) * item.qty
             subtotal += item_total
@@ -304,7 +305,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 Paragraph(item.titre[:40] + "..." if len(item.titre) > 40 else item.titre, ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_LEFT, leading=9)),
                 Paragraph(item.code, ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
                 Paragraph(str(item.qty), ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)),
-                # ✅ FIX : Affichage dynamique du total de la ligne formaté
+                # ✅ FIX : Affichage dynamique du total de la ligne formaté (Prix unitaire x quantité)
                 Paragraph(f"<b>{format_currency(item_total)}</b>", ParagraphStyle('TD', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#001a70'), fontName='Helvetica-Bold')),
                 Paragraph(item.code, ParagraphStyle('TD', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER, fontName='Courier', leading=8))
             ])
@@ -480,6 +481,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
         return StreamingResponse(
             iter([pdf_buffer.getvalue()]),
             media_type='application/pdf',
+            # ✅ FIX : Nom de fichier générique fixe pour le panier d'achats (pas de school_list.slug)
             headers={'Content-Disposition': 'attachment; filename=liste_scolaire.pdf'}
         )
         
