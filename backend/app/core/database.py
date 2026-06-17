@@ -1,31 +1,45 @@
+import os
 from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# dossier backend/data
+# Dossier backend/data
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
 DB_PATH = BASE_DIR / "data" / "erp.db"
-
-# Créer le dossier data s'il n'existe pas
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+# ✅ FIX : Détection dynamique de la base de données (Postgres sur Render, SQLite en local)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# ✅ FIX : Augmentation du timeout SQLite à 30 secondes pour éviter les blocages de concurrence
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False, "timeout": 30}
-)
+if DATABASE_URL:
+    # Les plateformes comme Render fournissent des URLs commençant par 'postgres://'
+    # mais SQLAlchemy exige impérativement la syntaxe moderne 'postgresql://' [1].
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+else:
+    DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-# ✅ FIX : Événement d'écoute SQLAlchemy pour forcer le mode WAL (Write-Ahead Logging)
-# Cela permet d'exécuter des lectures et écritures en parallèle sur SQLite sans verrous
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.close()
+# Configuration de l'engine selon le type de base de données
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False, "timeout": 30}
+    )
+    # Mode WAL pour SQLite local
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+else:
+    # Configuration optimisée pour PostgreSQL en production
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_recycle=300
+    )
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -34,16 +48,14 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
-print(f"DATABASE: {DB_PATH}")
+print(f"DATABASE CONNECTED: {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}")
 
 
 def init_db():
-    """Créer toutes les tables définies dans Base"""
     Base.metadata.create_all(bind=engine)
 
 
 def get_db():
-    """Dependency pour injecter la session DB dans les routes FastAPI"""
     db = SessionLocal()
     try:
         yield db
