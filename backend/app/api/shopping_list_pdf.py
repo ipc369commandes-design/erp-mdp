@@ -16,6 +16,8 @@ from typing import List, Optional
 import io as io_module
 import base64
 import urllib.request
+import gc  # ✅ AJOUT : Pour forcer la libération de la RAM immédiatement
+from PIL import Image as PILImage  # ✅ AJOUT : Pour compresser les images à la volée (Pillow est déjà requis par ReportLab)
 
 from app.core.database import get_db
 from app.models.school_list import SchoolList
@@ -35,7 +37,7 @@ class CartItem(BaseModel):
 
 class GeneratePDFRequest(BaseModel):
     items: List[CartItem]
-    discount_percent: Optional[float] = 0.0  # ✅ AJOUT : Reçoit la remise choisie dans le panier
+    discount_percent: Optional[float] = 0.0
 
 # ✅ FIX : Initialisation du routeur générique sans préfixe
 router = APIRouter()
@@ -44,6 +46,31 @@ router = APIRouter()
 def format_currency(value: float) -> str:
     """Formater un montant numérique au format monétaire français (ex: 39 975 FCFA)"""
     return f"{value:,.0f}".replace(",", " ") + " FCFA"
+
+
+def compress_image_for_pdf(image_data_bytes: bytes) -> io_module.BytesIO:
+    """
+    ✅ SÉCURITÉ RAM (Render 512MB) :
+    Compresse et redimensionne l'image à la volée sous forme de vignette (max 90x120).
+    Évite de charger des images de plusieurs mégaoctets non compressées en mémoire vive,
+    tout en préservant un rendu parfait à l'impression (largeur d'affichage de 0.8 cm).
+    """
+    try:
+        with PILImage.open(io_module.BytesIO(image_data_bytes)) as img:
+            # On convertit en RGB si l'image possède de la transparence pour la sauvegarder en JPEG léger
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            
+            # Redimensionne proportionnellement vers un format vignette
+            img.thumbnail((90, 120))
+            
+            out_buffer = io_module.BytesIO()
+            img.save(out_buffer, format="JPEG", quality=75)
+            out_buffer.seek(0)
+            return out_buffer
+    except Exception as e:
+        print(f"⚠️ Impossible de compresser l'image, utilisation du flux brut : {e}")
+        return io_module.BytesIO(image_data_bytes)
 
 
 # ============= ROUTE POST: GÉNÉRER PDF DEPUIS LE PANIER =============
@@ -282,18 +309,21 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             
             if item.image_url:
                 try:
+                    image_data = None
                     if item.image_url.startswith('data:image'):
                         base64_str = item.image_url.split(',')[1]
                         image_data = base64.b64decode(base64_str)
-                        image_io = io_module.BytesIO(image_data)
-                        image_cell = RLImage(image_io, width=0.8*cm, height=1.1*cm)
                     elif item.image_url.startswith('http'):
                         try:
                             with urllib.request.urlopen(item.image_url, timeout=3) as response:
-                                image_io = io_module.BytesIO(response.read())
-                                image_cell = RLImage(image_io, width=0.8*cm, height=1.1*cm)
+                                image_data = response.read()
                         except Exception as e:
                             print(f"Erreur URL image: {e}")
+                    
+                    if image_data:
+                        # ✅ Compression à la volée en vignette ultra-légère
+                        compressed_io = compress_image_for_pdf(image_data)
+                        image_cell = RLImage(compressed_io, width=0.8*cm, height=1.1*cm)
                 except Exception as e:
                     print(f"Erreur image: {e}")
             
@@ -374,12 +404,10 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             elements.append(Spacer(1, 0.15*cm))
             
             # ============= TOTALS SECTION (DYNAMIQUE) =============
-            # ✅ RECALCUL DYNAMIQUE : Prise en compte de la remise unique variable depuis le panier
             discount_percent = request.discount_percent if request.discount_percent is not None else 0.0
             discount = int(round(subtotal * (discount_percent / 100.0)))
             final_total = subtotal - discount
 
-            # Libellé sans décimales inutiles pour un affichage propre (ex: 10% au lieu de 10.0%)
             discount_label = f"{int(discount_percent)}%" if discount_percent.is_integer() else f"{discount_percent}%"
             
             totals_data = [
@@ -471,6 +499,9 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
         
         # Générer le PDF
         doc.build(elements)
+        
+        # Libération RAM immédiate après construction
+        gc.collect()
         
         # Retourner le PDF
         pdf_buffer.seek(0)
@@ -754,19 +785,22 @@ def generate_school_list_pdf(
             
             if product.image_url:
                 try:
+                    image_data = None
                     if product.image_url.startswith('data:image'):
                         base64_str = product.image_url.split(',')[1]
                         image_data = base64.b64decode(base64_str)
-                        image_io = io_module.BytesIO(image_data)
-                        image_cell = RLImage(image_io, width=0.8*cm, height=1.1*cm)
                     elif product.image_url.startswith('http'):
                         try:
                             # Ajout d'un timeout strict de 3 secondes pour ne pas figer le serveur
                             with urllib.request.urlopen(product.image_url, timeout=3) as response:
-                                image_io = io_module.BytesIO(response.read())
-                                image_cell = RLImage(image_io, width=0.8*cm, height=1.1*cm)
+                                image_data = response.read()
                         except Exception as e:
                             print(f"⚠️ Image URL skip (Timeout ou indisponible): {e}")
+                    
+                    if image_data:
+                        # ✅ Compression à la volée en vignette ultra-légère
+                        compressed_io = compress_image_for_pdf(image_data)
+                        image_cell = RLImage(compressed_io, width=0.8*cm, height=1.1*cm)
                 except Exception as e:
                     print(f"⚠️ Erreur décodage image: {e}")
             
@@ -852,7 +886,6 @@ def generate_school_list_pdf(
             discount = int(round(subtotal * (pct / 100.0)))
             final_total = subtotal - discount
 
-            # Libellé sans décimales inutiles pour un affichage propre (ex: 10% au lieu de 10.0%)
             discount_label = f"{int(pct)}%" if pct.is_integer() else f"{pct}%"
             
             totals_data = [
@@ -944,6 +977,9 @@ def generate_school_list_pdf(
         
         # Générer le PDF
         doc.build(elements)
+        
+        # Libération RAM immédiate après construction
+        gc.collect()
         
         # Retourner le PDF
         pdf_buffer.seek(0)
