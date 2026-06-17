@@ -35,6 +35,7 @@ class CartItem(BaseModel):
 
 class GeneratePDFRequest(BaseModel):
     items: List[CartItem]
+    discount_percent: Optional[float] = 0.0  # ✅ AJOUT : Reçoit la remise choisie dans le panier
 
 # ✅ FIX : Initialisation du routeur générique sans préfixe
 router = APIRouter()
@@ -372,9 +373,14 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
             elements.append(occasion_table)
             elements.append(Spacer(1, 0.15*cm))
             
-            # ============= TOTALS SECTION (LIVE COMPUTED) =============
-            discount = int(round(subtotal * 0.05))
+            # ============= TOTALS SECTION (DYNAMIQUE) =============
+            # ✅ RECALCUL DYNAMIQUE : Prise en compte de la remise unique variable depuis le panier
+            discount_percent = request.discount_percent if request.discount_percent is not None else 0.0
+            discount = int(round(subtotal * (discount_percent / 100.0)))
             final_total = subtotal - discount
+
+            # Libellé sans décimales inutiles pour un affichage propre (ex: 10% au lieu de 10.0%)
+            discount_label = f"{int(discount_percent)}%" if discount_percent.is_integer() else f"{discount_percent}%"
             
             totals_data = [
                 [
@@ -382,7 +388,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                     Paragraph(f"<b>{format_currency(subtotal)}</b>", ParagraphStyle('total_val', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_RIGHT, textColor=colors.white, leading=11))
                 ],
                 [
-                    Paragraph("<b>REMISE COMMERCIALE 5%</b>", ParagraphStyle('total_label', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=colors.HexColor('#111'), leading=11)),
+                    Paragraph(f"<b>REMISE COMMERCIALE {discount_label}</b>", ParagraphStyle('total_label', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=colors.HexColor('#111'), leading=11)),
                     Paragraph(f"<b>- {format_currency(discount)}</b>", ParagraphStyle('total_val', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_RIGHT, textColor=colors.HexColor('#111'), leading=11))
                 ],
                 [
@@ -490,6 +496,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
 @router.get("/school-lists-pdf/{list_id}/pdf")
 def generate_school_list_pdf(
     list_id: int,
+    discount_percent: Optional[float] = 0.0,  # ✅ AJOUT : Réception dynamique de la remise unique (0% par défaut)
     db: Session = Depends(get_db)
 ):
     """Générer un PDF de liste scolaire existante conforme à la maquette de valorisation"""
@@ -754,6 +761,7 @@ def generate_school_list_pdf(
                         image_cell = RLImage(image_io, width=0.8*cm, height=1.1*cm)
                     elif product.image_url.startswith('http'):
                         try:
+                            # Ajout d'un timeout strict de 3 secondes pour ne pas figer le serveur
                             with urllib.request.urlopen(product.image_url, timeout=3) as response:
                                 image_io = io_module.BytesIO(response.read())
                                 image_cell = RLImage(image_io, width=0.8*cm, height=1.1*cm)
@@ -838,9 +846,14 @@ def generate_school_list_pdf(
             elements.append(occasion_table)
             elements.append(Spacer(1, 0.15*cm))
             
-            # ============= TOTALS SECTION (LIVE COMPUTED) =============
-            discount = int(round(subtotal * 0.05))
+            # ============= TOTALS SECTION (DYNAMIQUE) =============
+            # ✅ RECALCUL DYNAMIQUE : Réception et application du pourcentage choisi (0% par défaut)
+            pct = discount_percent if discount_percent is not None else 0.0
+            discount = int(round(subtotal * (pct / 100.0)))
             final_total = subtotal - discount
+
+            # Libellé sans décimales inutiles pour un affichage propre (ex: 10% au lieu de 10.0%)
+            discount_label = f"{int(pct)}%" if pct.is_integer() else f"{pct}%"
             
             totals_data = [
                 [
@@ -848,7 +861,7 @@ def generate_school_list_pdf(
                     Paragraph(f"<b>{format_currency(subtotal)}</b>", ParagraphStyle('total_val', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_RIGHT, textColor=colors.white, leading=11))
                 ],
                 [
-                    Paragraph("<b>REMISE COMMERCIALE 5%</b>", ParagraphStyle('total_label', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=colors.HexColor('#111'), leading=11)),
+                    Paragraph(f"<b>REMISE COMMERCIALE {discount_label}</b>", ParagraphStyle('total_label', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_LEFT, textColor=colors.HexColor('#111'), leading=11)),
                     Paragraph(f"<b>- {format_currency(discount)}</b>", ParagraphStyle('total_val', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, alignment=TA_RIGHT, textColor=colors.HexColor('#111'), leading=11))
                 ],
                 [
