@@ -10,6 +10,35 @@ from app.models.sync_status import SyncStatus
 from app.services.type_detector import TypeDetector
 
 
+# FONCTIONS DE SÉCURISATION DES TYPES NUMÉRIQUES
+def safe_float(val) -> Optional[float]:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    val_str = str(val).strip().replace(" ", "").replace(",", ".")
+    if not val_str:
+        return None
+    try:
+        return float(val_str)
+    except ValueError:
+        return None
+
+
+def safe_int(val) -> Optional[int]:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return int(val)
+    val_str = str(val).strip().replace(" ", "")
+    if not val_str:
+        return None
+    try:
+        return int(float(val_str))
+    except ValueError:
+        return None
+
+
 class SyncService:
     def __init__(
         self, 
@@ -24,7 +53,6 @@ class SyncService:
         self.client = MDPClient(use_proxy=False)
         self.use_proxy = use_proxy
         
-        # Callbacks d'interaction pour le serveur web et la console
         self.log_callback = log_callback or (lambda msg: print(msg))
         self.stop_checker = stop_checker or (lambda: False)
         self.product_tracker = product_tracker or (lambda title: None)
@@ -40,7 +68,6 @@ class SyncService:
     # UPSERT PRODUCT + SYNC_STATUS
     # ==========================================
     def upsert_with_status(self, db, data: dict, status: str, error_msg: Optional[str] = None):
-        """Mettre à jour ou insérer un produit et son statut de synchronisation"""
         product = db.query(Product).filter(Product.code == data["code"]).first()
 
         if product:
@@ -94,110 +121,134 @@ class SyncService:
         return type_
 
     # ==========================================
-    # SYNC ONE ITEM (avec retry intelligent)
+    # SYNC ONE ITEM (Résolution du Deadlock via boucle locale)
     # ==========================================
-    async def sync_one(self, item: dict, retry_count: int = 0):
+    async def sync_one(self, item: dict):
         code = item["code"]
         prix_vente = item["prix_vente"]
         max_retries = 3
+        retry_count = 0
 
         async with self.semaphore:
-            # ✅ FIX : Nous n'ouvrons plus la session DB ici pour éviter de bloquer la base de données 
-            # pendant les longs appels réseau asynchrones de Playwright
-            try:
-                # 1. DETECTION TYPE PRODUIT (Appel réseau)
-                type_produit = await self.get_type(code)
-                if type_produit is None:
-                    db = SessionLocal() # Ouverture au dernier moment pour l'écriture
+            # ✅ FIX : Utilisation d'une boucle while au lieu d'appels récursifs 
+            # pour réutiliser indéfiniment la même place de sémaphore sans blocage
+            while retry_count <= max_retries:
+                try:
+                    # 1. DETECTION TYPE PRODUIT
+                    type_produit = await self.get_type(code)
+                    if type_produit is None:
+                        db = SessionLocal()
+                        try:
+                            self.upsert_with_status(
+                                db,
+                                {"code": code, "type_produit": None, "titre": None, "prix_vente": safe_float(prix_vente)},
+                                "failed",
+                                "Type produit introuvable"
+                            )
+                        finally:
+                            db.close()
+                        self.log(f"❌ {code}: type_produit introuvable")
+                        return
+
+                    # 2. APPEL API MDP
+                    response = await self.client.get_article(code=code, type_produit=type_produit)
+                    if response is None:
+                        db = SessionLocal()
+                        try:
+                            self.upsert_with_status(
+                                db,
+                                {"code": code, "type_produit": type_produit, "titre": None, "prix_vente": safe_float(prix_vente)},
+                                "failed",
+                                "Réponse vide"
+                            )
+                        finally:
+                            db.close()
+                        self.log(f"❌ {code}: Réponse vide de la plateforme")
+                        return
+
+                    # Si la clé "article" vaut explicitement null (None)
+                    article = response.get("article")
+                    if not article:
+                        db = SessionLocal()
+                        try:
+                            self.upsert_with_status(
+                                db,
+                                {"code": code, "type_produit": type_produit, "titre": None, "prix_vente": safe_float(prix_vente)},
+                                "failed",
+                                "Données de l'article vides (None) dans le JSON"
+                            )
+                        finally:
+                            db.close()
+                        self.log(f"❌ {code}: Données de l'article vides (None)")
+                        return
+
+                    self.product_tracker(article.get("titre", code))
+
+                    # Parsing sécurisé des auteurs
+                    auteurs_list = article.get("auteurs")
+                    auteurs = "; ".join(auteurs_list) if isinstance(auteurs_list, list) else None
+
+                    data = {
+                        "code": code,
+                        "type_produit": type_produit,
+                        "titre": article.get("titre"),
+                        "auteurs": auteurs,
+                        "editeur": article.get("editeur"),
+                        "collection": article.get("collection"),
+                        "description": article.get("presentation"),
+                        "image_url": article.get("imageUrl"),
+                        "pages": safe_int(article.get("pages")),
+                        "poids": safe_float(article.get("poids")),
+                        "longueur": safe_float(article.get("longueur")),
+                        "largeur": safe_float(article.get("largeur")),
+                        "epaisseur": safe_float(article.get("epaisseur")),
+                        "disponibilite": safe_int(article.get("disponibilite")),
+                        "prix_catalogue": safe_float(article.get("prix")),
+                        "prix_vente": safe_float(prix_vente),
+                        "synced_at": datetime.utcnow()
+                    }
+
+                    # Écriture finale réussie
+                    db = SessionLocal()
+                    try:
+                        self.upsert_with_status(db, data, "success")
+                        self.log(f"✔ {code} : {article.get('titre', '')[:30]}")
+                    finally:
+                        db.close()
+                    return # Succès, on quitte proprement la boucle et la tâche
+
+                except Exception as e:
+                    error_str = str(e)
+                    error_msg = f"{type(e).__name__}: {error_str[:150]}"
+
+                    is_network_error = any([
+                        "ETIMEDOUT" in error_str, "ECONNREFUSED" in error_str,
+                        "ECONNRESET" in error_str, "ENOTFOUND" in error_str,
+                        "socket" in error_str.lower(), "timeout" in error_str.lower(),
+                        "disconnected" in error_str.lower(), "network" in error_str.lower()
+                    ])
+
+                    # ✅ GESTION DU RETRY SÉCURISÉ SANS DEADLOCK
+                    if is_network_error and retry_count < max_retries:
+                        wait_time = 2 ** (retry_count + 1)
+                        self.log(f"🔄 Retry {retry_count + 1}/{max_retries} pour {code} dans {wait_time}s... (Cause: {error_msg})")
+                        retry_count += 1
+                        await asyncio.sleep(wait_time)
+                        continue # Recommence l'itération de la boucle while locale sur le même slot
+
+                    # Échec définitif (si ce n'est pas une erreur réseau ou si les retries sont épuisés)
+                    db = SessionLocal()
                     try:
                         self.upsert_with_status(
                             db,
-                            {"code": code, "type_produit": None, "titre": None, "prix_vente": prix_vente},
+                            {"code": code, "prix_vente": safe_float(prix_vente)},
                             "failed",
-                            "Type produit introuvable"
+                            error_msg
                         )
                     finally:
                         db.close()
-                    self.log(f"❌ {code}: type_produit introuvable")
-                    return
-
-                # 2. APPEL API MDP (Appel réseau)
-                response = await self.client.get_article(code=code, type_produit=type_produit)
-                if response is None:
-                    db = SessionLocal() # Ouverture au dernier moment pour l'écriture
-                    try:
-                        self.upsert_with_status(
-                            db,
-                            {"code": code, "type_produit": type_produit, "titre": None, "prix_vente": prix_vente},
-                            "failed",
-                            "Réponse vide"
-                        )
-                    finally:
-                        db.close()
-                    self.log(f"❌ {code}: Réponse vide de la plateforme")
-                    return
-
-                article = response.get("article", {})
-                self.product_tracker(article.get("titre", code))
-
-                auteurs = "; ".join(article["auteurs"]) if article.get("auteurs") else None
-
-                data = {
-                    "code": code,
-                    "type_produit": type_produit,
-                    "titre": article.get("titre"),
-                    "auteurs": auteurs,
-                    "editeur": article.get("editeur"),
-                    "collection": article.get("collection"),
-                    "description": article.get("presentation"),
-                    "image_url": article.get("imageUrl"),
-                    "pages": article.get("pages"),
-                    "poids": article.get("poids"),
-                    "longueur": article.get("longueur"),
-                    "largeur": article.get("largeur"),
-                    "epaisseur": article.get("epaisseur"),
-                    "disponibilite": article.get("disponibilite"),
-                    "prix_catalogue": article.get("prix"),
-                    "prix_vente": prix_vente,
-                    "synced_at": datetime.utcnow()
-                }
-
-                # ✅ Étape d'écriture en base (Dure seulement quelques millisecondes)
-                db = SessionLocal()
-                try:
-                    self.upsert_with_status(db, data, "success")
-                    self.log(f"✔ {code} : {article.get('titre', '')[:30]}")
-                finally:
-                    db.close()
-
-            except Exception as e:
-                error_str = str(e)
-                error_msg = f"{type(e).__name__}: {error_str[:150]}"
-
-                is_network_error = any([
-                    "ETIMEDOUT" in error_str, "ECONNREFUSED" in error_str,
-                    "ECONNRESET" in error_str, "ENOTFOUND" in error_str,
-                    "socket" in error_str.lower(), "timeout" in error_str.lower(),
-                    "disconnected" in error_str.lower(), "network" in error_str.lower()
-                ])
-
-                if is_network_error and retry_count < max_retries:
-                    wait_time = 2 ** (retry_count + 1)
-                    self.log(f"🔄 Retry {retry_count + 1}/{max_retries} pour {code} dans {wait_time}s...")
-                    await asyncio.sleep(wait_time)
-                    return await self.sync_one(item, retry_count + 1)
-
-                db = SessionLocal()
-                try:
-                    self.upsert_with_status(
-                        db,
-                        {"code": code, "prix_vente": prix_vente},
-                        "failed",
-                        error_msg
-                    )
-                finally:
-                    db.close()
-                self.log(f"❌ {code}: {error_msg}")
+                    self.log(f"❌ {code}: {error_msg}")
+                    return # Quitte la tâche après échec
                 
     # ==========================================
     # SPINNER CONSOLE DYNAMIQUE
@@ -238,7 +289,6 @@ class SyncService:
     # ==========================================
     async def run(self, batch_size: int = 15, delay_between_batches: float = 1.0, concurrency: int = 3):
         """Lancer la synchronisation par lots de façon optimisée"""
-        # Configuration dynamique du Sémaphore
         self.semaphore = asyncio.Semaphore(concurrency)
         
         stop_event = asyncio.Event()
