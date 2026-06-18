@@ -1,5 +1,7 @@
+
 // ============= CONFIGURATION & ÉTAT GLOBAL =============
 const CONFIG = {
+    // Utilise dynamiquement le domaine actuel (localhost en local, ou onrender en ligne)
     API_BASE: window.location.origin, 
     ITEMS_PER_PAGE: 24
 };
@@ -13,36 +15,16 @@ const STATE = {
     schoolYears: [],
     schoolLists: [],
     selectedProductIdFromSearch: null,
-    globalDiscount: 0,
-    syncTimeoutId: null // Singleton timeout ID to prevent multiple concurrent sync loops
+    // Un seul taux de remise global (0% par défaut)
+    globalDiscount: 0
 };
 
-// ============= GESTION DE LA LIBÉRATION DE MÉMOIRE (MODALS & EVENTS CLEARUP) =============
+// ============= FONCTIONS UTILITAIRES GLOBALES =============
 /**
- * Safely closes and cleans up a modal overlay, aborting all registered global listeners.
+ * Détermine si un produit est un livre (remise Livres) ou une fourniture (remise Fournitures)
  */
-function closeModal(overlay) {
-    if (!overlay) return;
-    if (overlay._abortController) {
-        overlay._abortController.abort(); // Unbinds all document/window events associated with this modal
-        overlay._abortController = null;
-    }
-    overlay.remove();
-}
-
-/**
- * Register global listeners assigned to a specific modal, ensuring clean garbage collection.
- */
-function registerModalListener(modalOverlay, target, eventType, callback) {
-    if (!modalOverlay._abortController) {
-        modalOverlay._abortController = new AbortController();
-    }
-    target.addEventListener(eventType, callback, { signal: modalOverlay._abortController.signal });
-}
-
-// Détermine si un produit est un livre
 function isBookProduct(code, type_produit) {
-    if (type_produit === 1 || type_produit === 6 || type_produit == '1' || type_produit == '6') return true;
+    if (type_produit === 1 || type_produit === 6 || type_produit === '1' || type_produit === '6') return true;
     if (code && (code.startsWith('978') || code.startsWith('979'))) return true;
     return false;
 }
@@ -50,12 +32,18 @@ function isBookProduct(code, type_produit) {
 // ============= INITIALISATION DE L'APPLICATION =============
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🟢 Initialisation de l\'application ERP...');
+    
+    // Charger la liste d'achats depuis le localStorage
     loadShoppingList();
     updateCartBadge();
+
+    // Initialiser les modules
     initNavigation();
     initProductEvents();
     initGlobalModals();
     initializeSyncSystem();
+
+    // Premier chargement des données
     loadProducts();
 });
 
@@ -63,24 +51,39 @@ document.addEventListener('DOMContentLoaded', () => {
 function loadShoppingList() {
     const saved = localStorage.getItem('shoppingList');
     if (saved) {
-        try { STATE.shoppingList = JSON.parse(saved); } catch (e) { STATE.shoppingList = []; }
+        try {
+            STATE.shoppingList = JSON.parse(saved);
+        } catch (e) {
+            console.error('Erreur lors de la lecture de la liste d\'achats', e);
+            STATE.shoppingList = [];
+        }
     }
+    // Charger également la remise globale personnalisée
     const savedGlobalDiscount = localStorage.getItem('globalDiscount');
-    STATE.globalDiscount = savedGlobalDiscount !== null ? (parseInt(savedGlobalDiscount) || 0) : 0;
+    if (savedGlobalDiscount !== null) {
+        STATE.globalDiscount = parseInt(savedGlobalDiscount) || 0;
+    } else {
+        STATE.globalDiscount = 0; // Aucun appliqué par défaut
+    }
 }
 
 function saveShoppingList() {
     localStorage.setItem('shoppingList', JSON.stringify(STATE.shoppingList));
-    localStorage.setItem('globalDiscount', STATE.globalDiscount.toString());
+    localStorage.setItem('globalDiscount', STATE.globalDiscount);
 }
 
 function addToShoppingList(product) {
     const existing = STATE.shoppingList.find(item => item.id === product.id);
+    
     if (existing) {
         existing.qty += 1;
     } else {
-        STATE.shoppingList.push({ ...product, qty: 1 });
+        STATE.shoppingList.push({
+            ...product,
+            qty: 1
+        });
     }
+    
     saveShoppingList();
     alert(`✅ "${product.titre}" a été ajouté à la liste!`);
     updateCartBadge();
@@ -89,14 +92,15 @@ function addToShoppingList(product) {
 function updateCartBadge() {
     const badge = document.getElementById('cartBadge');
     if (badge) {
-        badge.textContent = STATE.shoppingList.length.toString();
+        badge.textContent = STATE.shoppingList.length;
         badge.style.display = STATE.shoppingList.length > 0 ? 'inline-flex' : 'none';
     }
 }
 
 function openShoppingListModal() {
     const existingModal = document.querySelector('.shopping-list-overlay');
-    if (existingModal) closeModal(existingModal);
+    if (existingModal) existingModal.remove();
+
     const modal = createShoppingListModal();
     document.body.appendChild(modal);
 }
@@ -104,7 +108,6 @@ function openShoppingListModal() {
 function createShoppingListModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay shopping-list-overlay';
-    overlay._abortController = new AbortController();
     
     let itemsHTML = '';
     let subtotal = 0;
@@ -112,12 +115,15 @@ function createShoppingListModal() {
     STATE.shoppingList.forEach((item, index) => {
         const itemTotal = (item.prix_vente || 0) * item.qty;
         subtotal += itemTotal;
+        
         const imageUrl = item.image_url || 'https://via.placeholder.com/50?text=No+Image';
         
         itemsHTML += `
             <tr>
                 <td>${index + 1}</td>
-                <td><img src="${imageUrl}" alt="Image" style="width: 40px; height: 60px; object-fit: cover; border-radius: 4px;"></td>
+                <td>
+                    <img src="${imageUrl}" alt="Image" style="width: 40px; height: 60px; object-fit: cover; border-radius: 4px;">
+                </td>
                 <td>${item.titre || 'Sans titre'}</td>
                 <td>${item.code || 'N/A'}</td>
                 <td class="text-center">
@@ -127,7 +133,8 @@ function createShoppingListModal() {
                 <td class="text-center">
                     <button class="btn-remove" data-index="${index}" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">❌</button>
                 </td>
-            </tr>`;
+            </tr>
+        `;
     });
     
     const discountValue = Math.round(subtotal * (STATE.globalDiscount / 100));
@@ -156,9 +163,14 @@ function createShoppingListModal() {
                         ${itemsHTML || '<tr><td colspan="7" style="text-align: center; padding: 20px;">Aucun produit dans la liste</td></tr>'}
                     </tbody>
                 </table>
+                
                 ${STATE.shoppingList.length > 0 ? `
                     <div style="margin-top: 30px; text-align: right;">
-                        <div style="font-size: 18px; margin-bottom: 15px;"><strong>Sous-total des articles :</strong> ${subtotal.toLocaleString('fr-FR')} FCFA</div>
+                        <div style="font-size: 18px; margin-bottom: 15px;">
+                            <strong>Sous-total des articles :</strong> ${subtotal.toLocaleString('fr-FR')} FCFA
+                        </div>
+                        
+                        <!-- Configuration interactive de la remise unique du panier -->
                         <div style="display: flex; justify-content: flex-end; gap: 20px; margin-bottom: 15px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; align-items: center;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <label style="font-size: 14px;"><strong>Pourcentage de remise globale :</strong></label>
@@ -166,16 +178,25 @@ function createShoppingListModal() {
                                 <span style="font-size: 14px; font-weight: bold; color: #111;">%</span>
                             </div>
                         </div>
-                        <div style="font-size: 16px; margin-bottom: 15px; color: #64748b;"><strong>Remise Appliquée (${STATE.globalDiscount}%) :</strong> -${discountValue.toLocaleString('fr-FR')} FCFA</div>
-                        <div style="font-size: 24px; color: #001a70; padding: 15px; background: #f2b300; border-radius: 8px; width: fit-content; margin-left: auto;"><strong>Total TTC Final:</strong> ${totalTtc.toLocaleString('fr-FR')} FCFA</div>
-                    </div>` : ''}
+
+                        <div style="font-size: 16px; margin-bottom: 15px; color: #64748b;">
+                            <strong>Remise Appliquée (${STATE.globalDiscount}%) :</strong> -${discountValue.toLocaleString('fr-FR')} FCFA
+                        </div>
+                        
+                        <div style="font-size: 24px; color: #001a70; padding: 15px; background: #f2b300; border-radius: 8px; width: fit-content; margin-left: auto;">
+                            <strong>Total TTC Final:</strong> ${totalTtc.toLocaleString('fr-FR')} FCFA
+                        </div>
+                    </div>
+                ` : ''}
             </div>
             <div class="modal-footer">
                 <button class="close-modal btn btn-secondary">Fermer</button>
                 ${STATE.shoppingList.length > 0 ? '<button class="btn btn-primary" id="generatePdfBtn">📄 Générer le PDF</button>' : ''}
             </div>
-        </div>`;
+        </div>
+    `;
     
+    // Listeners internes
     overlay.querySelectorAll('.qty-input').forEach(input => {
         input.addEventListener('change', (e) => {
             const index = parseInt(e.target.dataset.index);
@@ -186,6 +207,7 @@ function createShoppingListModal() {
         });
     });
 
+    // Prise en compte des modifications de pourcentage unique
     overlay.querySelectorAll('.discount-input').forEach(input => {
         input.addEventListener('change', (e) => {
             const val = parseInt(e.target.value) || 0;
@@ -223,14 +245,17 @@ async function generateShoppingListPDF() {
                 discount_percent: STATE.globalDiscount
             })
         });
+
         if (!response.ok) throw new Error('Erreur lors de la génération du PDF');
+
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = 'liste_scolaire.pdf';
         a.click();
-        setTimeout(() => window.URL.revokeObjectURL(url), 1000); // Safe revocation delay
+        window.URL.revokeObjectURL(url);
+        
         alert('✅ PDF généré avec succès!');
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -242,6 +267,7 @@ function initProductEvents() {
     const searchBtn = document.getElementById('searchBtn');
     const searchInput = document.getElementById('searchInput');
     const viewListBtn = document.getElementById('viewListBtn');
+
     const toggleFiltersBtn = document.getElementById('toggleFilters');
     const filtersPanel = document.getElementById('filtersPanel');
     const applyFiltersBtn = document.getElementById('applyFilters');
@@ -249,11 +275,17 @@ function initProductEvents() {
 
     if (searchBtn) searchBtn.addEventListener('click', handleSearch);
     if (searchInput) {
-        searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSearch(); });
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch();
+        });
     }
+
     if (toggleFiltersBtn && filtersPanel) {
-        toggleFiltersBtn.addEventListener('click', () => { filtersPanel.classList.toggle('hidden'); });
+        toggleFiltersBtn.addEventListener('click', () => {
+            filtersPanel.classList.toggle('hidden');
+        });
     }
+
     if (applyFiltersBtn) applyFiltersBtn.addEventListener('click', applyFilters);
     if (resetFiltersBtn) resetFiltersBtn.addEventListener('click', resetFilters);
     if (viewListBtn) viewListBtn.addEventListener('click', openShoppingListModal);
@@ -261,19 +293,18 @@ function initProductEvents() {
 
 // ============= GESTION DES MODALES GLOBALISÉE =============
 function initGlobalModals() {
-    // Avoid double bindings
     document.addEventListener('click', (e) => {
         if (e.target.classList.contains('modal-overlay')) {
-            closeModal(e.target);
+            e.target.remove();
         }
         if (e.target.classList.contains('close-modal')) {
-            closeModal(e.target.closest('.modal-overlay'));
+            e.target.closest('.modal-overlay').remove();
         }
     });
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            document.querySelectorAll('.modal-overlay').forEach(modal => closeModal(modal));
+            document.querySelectorAll('.modal-overlay').forEach(modal => modal.remove());
         }
     });
 }
@@ -286,7 +317,6 @@ function openDetailsModal(product) {
 function createDetailsModal(product) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay._abortController = new AbortController();
     
     const imageUrl = product.image_url || 'https://via.placeholder.com/300x200?text=No+Image';
     const disponibilite = product.disponibilite > 0 ? '✅ Disponible' : '❌ Indisponible';
@@ -316,7 +346,8 @@ function createDetailsModal(product) {
             <div class="modal-footer">
                 <button class="close-modal btn btn-secondary">Fermer</button>
             </div>
-        </div>`;
+        </div>
+    `;
     return overlay;
 }
 
@@ -328,7 +359,6 @@ function openEditModal(product) {
 function createEditModal(product) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay._abortController = new AbortController();
     
     overlay.innerHTML = `
         <div class="modal modal-fullscreen">
@@ -353,7 +383,7 @@ function createEditModal(product) {
                         </div>
                         <input type="file" name="image_file" id="imageFile" accept="image/*" class="image-input">
                         <input type="hidden" name="image_url" value="${product.image_url || ''}">
-                        <small>Sélectionnez une image locale (max 2 Mo)</small>
+                        <small>Sélectionnez une image locale</small>
                     </div>
                     <div class="form-group">
                         <label>Auteurs:</label>
@@ -400,7 +430,8 @@ function createEditModal(product) {
                 <button class="close-modal btn btn-secondary">Annuler</button>
                 <button type="button" class="btn btn-primary" id="saveBtn">💾 Enregistrer</button>
             </div>
-        </div>`;
+        </div>
+    `;
     
     const imageInput = overlay.querySelector('#imageFile');
     const imagePreview = overlay.querySelector('#imagePreview');
@@ -409,12 +440,6 @@ function createEditModal(product) {
     imageInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            // PROACTIVE CLIENT OPTIMIZATION: Reject huge image sizes to avoid rendering and server OOM crashes
-            if (file.size > 2 * 1024 * 1024) {
-                alert('⚠️ L\'image est trop volumineuse (maximum 2 Mo) pour éviter de bloquer l\'application ou le serveur.');
-                imageInput.value = '';
-                return;
-            }
             const reader = new FileReader();
             reader.onload = (event) => {
                 imagePreview.src = event.target.result;
@@ -439,6 +464,7 @@ async function saveProductChanges(productId, modalOverlay) {
     const cleanData = {};
     for (const [key, value] of Object.entries(data)) {
         if (key === 'image_file' || value === '' || value === null) continue;
+        
         if (['pages', 'poids', 'prix_vente', 'prix_catalogue', 'disponibilite'].includes(key)) {
             const numValue = parseFloat(value);
             if (!isNaN(numValue)) cleanData[key] = numValue;
@@ -453,9 +479,11 @@ async function saveProductChanges(productId, modalOverlay) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(cleanData)
         });
+
         const responseData = await response.json();
         if (!response.ok) throw new Error(responseData.message || 'Erreur lors de la mise à jour');
-        closeModal(modalOverlay);
+
+        modalOverlay.remove();
         loadProducts();
         alert('✅ Produit mis à jour avec succès!');
     } catch (error) {
@@ -503,6 +531,7 @@ function applyFilters() {
     STATE.filteredProducts = STATE.allProducts.filter(product => {
         const price = product.prix_vente || 0;
         if (price < minPrice || price > maxPrice) return false;
+
         if (disponibilite !== '') {
             const isAvailable = product.disponibilite > 0 ? '1' : '0';
             if (isAvailable !== disponibilite) return false;
@@ -539,6 +568,7 @@ function displayProducts(products) {
     if (!productsContainer) return;
 
     productsContainer.innerHTML = '';
+
     if (products.length === 0) {
         productsContainer.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: white; padding: 40px;">Aucun produit trouvé</p>';
         if (paginationDiv) paginationDiv.innerHTML = '';
@@ -554,6 +584,7 @@ function displayProducts(products) {
         const card = createProductCard(product);
         productsContainer.appendChild(card);
     });
+
     displayPagination(totalPages);
 }
 
@@ -584,11 +615,13 @@ function createProductCard(product) {
                 <button class="btn btn-details">👁️ Détails</button>
                 <button class="btn btn-edit">✏️ Modifier</button>
             </div>
-        </div>`;
+        </div>
+    `;
 
     card.querySelector('.btn-add-to-list').addEventListener('click', () => addToShoppingList(product));
     card.querySelector('.btn-details').addEventListener('click', () => openDetailsModal(product));
     card.querySelector('.btn-edit').addEventListener('click', () => openEditModal(product));
+
     return card;
 }
 
@@ -613,7 +646,7 @@ function displayPagination(totalPages) {
     for (let i = 1; i <= totalPages; i++) {
         if (i <= 10 || i === totalPages) {
             const btn = document.createElement('button');
-            btn.textContent = i.toString();
+            btn.textContent = i;
             btn.className = i === STATE.currentPage ? 'active' : '';
             btn.addEventListener('click', () => {
                 STATE.currentPage = i;
@@ -622,6 +655,7 @@ function displayPagination(totalPages) {
             });
             paginationDiv.appendChild(btn);
         }
+
         if (i === 10 && totalPages > 11) {
             const dots = document.createElement('span');
             dots.textContent = '...';
@@ -647,6 +681,7 @@ function handleSearch() {
     if (!searchInput) return;
 
     const query = searchInput.value.toLowerCase().trim();
+
     if (!query) {
         STATE.filteredProducts = [...STATE.allProducts];
     } else {
@@ -664,9 +699,11 @@ function handleSearch() {
 function updateStats() {
     const statsText = document.getElementById('statsText');
     if (!statsText) return;
+
     const total = STATE.allProducts.length;
     const shown = STATE.filteredProducts.length;
     const available = STATE.filteredProducts.filter(p => p.disponibilite > 0).length;
+    
     statsText.textContent = `📊 ${shown}/${total} produits affichés | ✅ ${available} disponibles`;
 }
 
@@ -721,12 +758,6 @@ function initializeSyncSystem() {
         try {
             const response = await fetch(`${CONFIG.API_BASE}/sync/start`, { method: 'POST' });
             if (!response.ok) throw new Error('HTTP ' + response.status);
-            
-            // Prevent multiple parallel setTimeout polling processes
-            if (STATE.syncTimeoutId) {
-                clearTimeout(STATE.syncTimeoutId);
-                STATE.syncTimeoutId = null;
-            }
             checkSyncProgress();
         } catch (error) {
             console.error('❌ Erreur de synchro:', error);
@@ -741,10 +772,6 @@ function initializeSyncSystem() {
         try {
             await fetch(`${CONFIG.API_BASE}/sync/stop`, { method: 'POST' });
             syncBtn.disabled = false;
-            if (STATE.syncTimeoutId) {
-                clearTimeout(STATE.syncTimeoutId);
-                STATE.syncTimeoutId = null;
-            }
         } catch (e) {
             console.error(e);
         }
@@ -754,33 +781,27 @@ function initializeSyncSystem() {
     const stopSyncBtnModal = document.getElementById('stopSyncBtnModal');
     if (stopSyncBtnModal) stopSyncBtnModal.addEventListener('click', stopAction);
 
-    // Dynamic clean drag-and-drop mouse handlers to prevent memory leak
+    // Modal Drag and Drop
     const header = document.querySelector('.sync-modal-header');
     if (header && syncModalContent) {
         let isDragging = false;
         let initialX, initialY;
 
-        const onMouseMove = (e) => {
+        header.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            initialX = e.clientX - syncModalContent.offsetLeft;
+            initialY = e.clientY - syncModalContent.offsetTop;
+        });
+
+        document.addEventListener('mousemove', (e) => {
             if (isDragging) {
                 syncModalContent.style.left = (e.clientX - initialX) + 'px';
                 syncModalContent.style.top = (e.clientY - initialY) + 'px';
                 syncModalContent.style.transform = 'none';
             }
-        };
-
-        const onMouseUp = () => {
-            isDragging = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-        };
-
-        header.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            initialX = e.clientX - syncModalContent.offsetLeft;
-            initialY = e.clientY - syncModalContent.offsetTop;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
         });
+
+        document.addEventListener('mouseup', () => { isDragging = false; });
     }
 
     const minimizeBtn = document.getElementById('minimizeModal');
@@ -790,9 +811,9 @@ function initializeSyncSystem() {
         });
     }
 
-    const closeModalBtn = document.getElementById('closeModal');
-    if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', () => {
+    const closeModal = document.getElementById('closeModal');
+    if (closeModal) {
+        closeModal.addEventListener('click', () => {
             if (confirm('Êtes-vous sûr de vouloir arrêter la synchronisation ?')) {
                 stopAction();
                 syncModal.classList.add('hidden');
@@ -847,9 +868,8 @@ async function checkSyncProgress() {
         }
 
         if (data.running) {
-            STATE.syncTimeoutId = setTimeout(checkSyncProgress, 2000);
+            setTimeout(checkSyncProgress, 2000);
         } else {
-            STATE.syncTimeoutId = null;
             const syncBtn = document.getElementById('syncBtn');
             const syncProgress = document.getElementById('syncProgress');
             const syncModal = document.getElementById('syncModal');
@@ -882,16 +902,20 @@ function initNavigation() {
     navContainer.addEventListener('click', (e) => {
         const btn = e.target.closest('.nav-btn');
         if (!btn) return;
+
         const targetPage = btn.dataset.target;
         if (!targetPage) return;
 
+        // Gérer les classes actives sur les boutons
         navContainer.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
+        // Gérer l'affichage des sections
         document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
         const targetSection = document.getElementById('page-' + targetPage);
         if (targetSection) targetSection.classList.remove('hidden');
 
+        // Charger les données de la page correspondante
         switch (targetPage) {
             case 'lists':
                 loadSchoolsForLists();
@@ -905,6 +929,7 @@ function initNavigation() {
         }
     });
 
+    // Lier le bouton "Nouvelle Liste" de l'en-tête (page Listes)
     const createListBtn = document.getElementById('createListBtn');
     if (createListBtn) {
         createListBtn.addEventListener('click', openCreateListModal);
@@ -935,9 +960,12 @@ async function loadSchools() {
                             <button class="btn btn-primary btn-sm btn-edit-school" data-id="${school.id}" data-nom="${school.nom}" data-ville="${school.ville || ''}">✏️ Modifier</button>
                             <button class="btn btn-danger btn-sm btn-delete-school" data-id="${school.id}">🗑️ Supprimer</button>
                         </div>
-                    </div>`).join('')}
-            </div>`;
+                    </div>
+                `).join('')}
+            </div>
+        `;
 
+        // Événements dynamiques
         container.querySelector('#addSchoolBtn').addEventListener('click', openCreateSchoolModal);
         container.querySelectorAll('.btn-edit-school').forEach(btn => {
             btn.addEventListener('click', () => openEditSchoolModal(btn.dataset.id, btn.dataset.nom, btn.dataset.ville));
@@ -945,6 +973,7 @@ async function loadSchools() {
         container.querySelectorAll('.btn-delete-school').forEach(btn => {
             btn.addEventListener('click', () => deleteSchool(btn.dataset.id));
         });
+
     } catch (error) {
         console.error('Erreur:', error);
         container.innerHTML = '<p style="color: red;">Erreur lors du chargement des écoles</p>';
@@ -954,7 +983,6 @@ async function loadSchools() {
 function openCreateSchoolModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay._abortController = new AbortController();
     overlay.innerHTML = `
         <div class="modal">
             <div class="modal-header">
@@ -977,7 +1005,8 @@ function openCreateSchoolModal() {
                 <button class="close-modal btn btn-secondary">Annuler</button>
                 <button class="btn btn-primary" id="saveNewSchoolBtn">💾 Enregistrer</button>
             </div>
-        </div>`;
+        </div>
+    `;
     document.body.appendChild(overlay);
     overlay.querySelector('#saveNewSchoolBtn').addEventListener('click', saveSchool);
 }
@@ -985,7 +1014,6 @@ function openCreateSchoolModal() {
 function openEditSchoolModal(id, nom, ville) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay._abortController = new AbortController();
     overlay.innerHTML = `
         <div class="modal">
             <div class="modal-header">
@@ -1008,7 +1036,8 @@ function openEditSchoolModal(id, nom, ville) {
                 <button class="close-modal btn btn-secondary">Annuler</button>
                 <button class="btn btn-primary" id="updateSchoolBtn">💾 Enregistrer</button>
             </div>
-        </div>`;
+        </div>
+    `;
     document.body.appendChild(overlay);
     overlay.querySelector('#updateSchoolBtn').addEventListener('click', () => updateSchool(id));
 }
@@ -1016,19 +1045,23 @@ function openEditSchoolModal(id, nom, ville) {
 async function saveSchool() {
     const name = document.getElementById('schoolName').value.trim();
     const city = document.getElementById('schoolCity').value.trim();
+
     if (!name) {
         alert('⚠️ Le nom de l\'école est obligatoire');
         return;
     }
+
     try {
         const res = await fetch(`${CONFIG.API_BASE}/schools`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nom: name, ville: city })
         });
+
         if (!res.ok) throw new Error('Erreur lors de la création');
+
         alert('✅ École ajoutée avec succès!');
-        closeModal(document.querySelector('.modal-overlay'));
+        document.querySelector('.modal-overlay').remove();
         loadSchools();
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -1038,19 +1071,23 @@ async function saveSchool() {
 async function updateSchool(id) {
     const name = document.getElementById('editSchoolName').value.trim();
     const city = document.getElementById('editSchoolCity').value.trim();
+
     if (!name) {
         alert('⚠️ Le nom de l\'école est obligatoire');
         return;
     }
+
     try {
         const res = await fetch(`${CONFIG.API_BASE}/schools/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nom: name, ville: city })
         });
+
         if (!res.ok) throw new Error('Erreur de modification');
+
         alert('✅ École mise à jour!');
-        closeModal(document.querySelector('.modal-overlay'));
+        document.querySelector('.modal-overlay').remove();
         loadSchools();
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -1092,8 +1129,10 @@ async function loadYears() {
                             <button class="btn btn-primary btn-sm btn-edit-year" data-id="${year.id}" data-libelle="${year.libelle}">✏️ Modifier</button>
                             <button class="btn btn-danger btn-sm btn-delete-year" data-id="${year.id}">🗑️ Supprimer</button>
                         </div>
-                    </div>`).join('')}
-            </div>`;
+                    </div>
+                `).join('')}
+            </div>
+        `;
 
         container.querySelector('#addYearBtn').addEventListener('click', openCreateYearModal);
         container.querySelectorAll('.btn-edit-year').forEach(btn => {
@@ -1102,6 +1141,7 @@ async function loadYears() {
         container.querySelectorAll('.btn-delete-year').forEach(btn => {
             btn.addEventListener('click', () => deleteYear(btn.dataset.id));
         });
+
     } catch (error) {
         console.error(error);
         container.innerHTML = '<p style="color: red;">Erreur de chargement des années</p>';
@@ -1111,7 +1151,6 @@ async function loadYears() {
 function openCreateYearModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay._abortController = new AbortController();
     overlay.innerHTML = `
         <div class="modal">
             <div class="modal-header">
@@ -1130,7 +1169,8 @@ function openCreateYearModal() {
                 <button class="close-modal btn btn-secondary">Annuler</button>
                 <button class="btn btn-primary" id="saveNewYearBtn">💾 Enregistrer</button>
             </div>
-        </div>`;
+        </div>
+    `;
     document.body.appendChild(overlay);
     overlay.querySelector('#saveNewYearBtn').addEventListener('click', saveYear);
 }
@@ -1138,7 +1178,6 @@ function openCreateYearModal() {
 function openEditYearModal(id, label) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay._abortController = new AbortController();
     overlay.innerHTML = `
         <div class="modal">
             <div class="modal-header">
@@ -1157,7 +1196,8 @@ function openEditYearModal(id, label) {
                 <button class="close-modal btn btn-secondary">Annuler</button>
                 <button class="btn btn-primary" id="updateYearBtn">💾 Enregistrer</button>
             </div>
-        </div>`;
+        </div>
+    `;
     document.body.appendChild(overlay);
     overlay.querySelector('#updateYearBtn').addEventListener('click', () => updateYear(id));
 }
@@ -1168,6 +1208,7 @@ async function saveYear() {
         alert('⚠️ L\'année scolaire est obligatoire');
         return;
     }
+
     try {
         const res = await fetch(`${CONFIG.API_BASE}/school-years`, {
             method: 'POST',
@@ -1176,7 +1217,7 @@ async function saveYear() {
         });
         if (!res.ok) throw new Error('Erreur de création');
         alert('✅ Année ajoutée !');
-        closeModal(document.querySelector('.modal-overlay'));
+        document.querySelector('.modal-overlay').remove();
         loadYears();
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -1189,6 +1230,7 @@ async function updateYear(id) {
         alert('⚠️ L\'année scolaire est obligatoire');
         return;
     }
+
     try {
         const res = await fetch(`${CONFIG.API_BASE}/school-years/${id}`, {
             method: 'PUT',
@@ -1197,7 +1239,7 @@ async function updateYear(id) {
         });
         if (!res.ok) throw new Error('Erreur de mise à jour');
         alert('✅ Année modifiée !');
-        closeModal(document.querySelector('.modal-overlay'));
+        document.querySelector('.modal-overlay').remove();
         loadYears();
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -1230,6 +1272,7 @@ async function loadSchoolsForLists() {
             <div style="margin-bottom: 20px;">
                 <button class="btn btn-primary" id="nestedCreateListBtn">➕ Nouvelle liste</button>
             </div>
+
             <div class="school-selector">
                 <label><strong>Sélectionnez une école:</strong></label>
                 <select id="schoolSelect" style="padding: 8px; font-size: 14px; border-radius: 4px;">
@@ -1237,11 +1280,15 @@ async function loadSchoolsForLists() {
                     ${schoolsData.map(school => `<option value="${school.id}">${school.nom}</option>`).join('')}
                 </select>
             </div>
-            <div id="listsContent"></div>`;
+
+            <div id="listsContent"></div>
+        `;
 
         container.querySelector('#nestedCreateListBtn').addEventListener('click', openCreateListModal);
+        
         const schoolSelect = container.querySelector('#schoolSelect');
         schoolSelect.addEventListener('change', loadYearsForLists);
+
     } catch (error) {
         console.error('Erreur:', error);
         container.innerHTML = '<p style="color: red;">Erreur lors du chargement des écoles.</p>';
@@ -1261,6 +1308,7 @@ async function loadYearsForLists() {
         const res = await fetch(`${CONFIG.API_BASE}/public/school-lists/schools/${schoolId}/years`);
         const data = await res.json();
 
+        // ✅ Utilisation de la classe 'school-selector' pour appliquer le thème CSS sombre
         listsContent.innerHTML = `
             <div class="school-selector" style="margin-top: 20px;">
                 <label><strong>Sélectionnez une année:</strong></label>
@@ -1269,10 +1317,12 @@ async function loadYearsForLists() {
                     ${data.map(year => `<option value="${year.id}">${year.libelle}</option>`).join('')}
                 </select>
             </div>
-            <div id="classesContent"></div>`;
+            <div id="classesContent"></div>
+        `;
 
         const yearSelect = document.getElementById('yearSelectLists');
         yearSelect.addEventListener('change', (e) => loadClassesForLists(schoolId, e.target.value));
+
     } catch (error) {
         console.error(error);
         listsContent.innerHTML = '<p style="color: red;">Erreur de chargement des années pour cette école.</p>';
@@ -1303,14 +1353,18 @@ async function loadClassesForLists(schoolId, yearId) {
                             <button class="btn btn-success btn-sm btn-edit-list" data-id="${list.id}">✏️ Modifier</button>
                             <button class="btn btn-danger btn-sm btn-delete-list" data-id="${list.id}">🗑️ Supprimer</button>
                         </div>
-                    </div>`).join('')}
-            </div>`;
+                    </div>
+                `).join('')}
+            </div>
+        `;
 
+        // Événements dynamiques
         classesContent.querySelectorAll('.btn-view-list').forEach(b => b.addEventListener('click', () => openListDetails(b.dataset.id)));
         classesContent.querySelectorAll('.btn-items-list').forEach(b => b.addEventListener('click', () => openListItemsModal(b.dataset.id)));
         classesContent.querySelectorAll('.btn-pdf-list').forEach(b => b.addEventListener('click', () => generateListPDF(b.dataset.id)));
         classesContent.querySelectorAll('.btn-edit-list').forEach(b => b.addEventListener('click', () => openEditListModal(b.dataset.id)));
         classesContent.querySelectorAll('.btn-delete-list').forEach(b => b.addEventListener('click', () => deleteList(b.dataset.id, schoolId, yearId)));
+
     } catch (error) {
         console.error(error);
         classesContent.innerHTML = '<p style="color: red;">Erreur lors du chargement des classes.</p>';
@@ -1322,19 +1376,19 @@ async function openListDetails(id) {
         const res = await fetch(`${CONFIG.API_BASE}/school-lists/${id}/details`);
         const data = await res.json();
 
+        // Récupérer le nom de l'école sélectionnée de manière sécurisée
         const schoolName = document.getElementById('schoolSelect') 
             ? document.getElementById('schoolSelect').options[document.getElementById('schoolSelect').selectedIndex].text 
             : "Établissement";
 
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
-        overlay._abortController = new AbortController();
 
         let subtotal = 0;
         let itemsHTML = '';
 
         (data.items || []).forEach((item, idx) => {
-            const itemTotal = (item.prix_unitaire || 0) * (item.quantite || 1);
+            const itemTotal = (item.prix_unitaire || 0) * (item.quantite || 1); // ✅ Calcul du total de la ligne
             subtotal += itemTotal;
 
             itemsHTML += `
@@ -1343,14 +1397,18 @@ async function openListDetails(id) {
                 <td class="center">
                     <img class="book-image" src="${item.image_url || 'https://via.placeholder.com/90x120'}" alt="${item.titre || ''}" onerror="this.src='https://via.placeholder.com/90x120'">
                 </td>
-                <td><strong style="color: #001a70; font-size: 15px;">${item.titre || 'N/A'}</strong></td>
+                <td>
+                    <strong style="color: #001a70; font-size: 15px;">${item.titre || 'N/A'}</strong>
+                </td>
                 <td class="center" style="font-family: monospace; font-size: 14px;">${item.code || 'N/A'}</td>
                 <td class="center">${item.quantite || 1}</td>
                 <td class="center price">${itemTotal.toLocaleString('fr-FR')}</td>
                 <td class="center barcode">${item.code || 'N/A'}</td>
-            </tr>`;
+            </tr>
+            `;
         });
 
+        // Calculs basés sur le pourcentage unique défini dans STATE (0% par défaut)
         const discountValue = Math.round(subtotal * (STATE.globalDiscount / 100));
         const totalTtc = subtotal - discountValue;
 
@@ -1361,7 +1419,11 @@ async function openListDetails(id) {
                 <button class="close-modal">&times;</button>
             </div>
             <div class="modal-body" style="background:#eef2fb; padding: 25px;">
+                
+                <!-- MAQUETTE DE PREVIEW PHYSIQUE -->
                 <div class="page-list-details">
+                    
+                    <!-- HEADER -->
                     <div class="header">
                         <div class="logo-zone">
                             <div class="logo-text">
@@ -1377,23 +1439,36 @@ async function openListDetails(id) {
                                 ✉️ ipc369@yahoo.fr<br>
                                 🌐 www.maisondelapressegabon.com
                             </div>
-                            <div class="shop-box">2 MAGASINS<br><br>📍 GLASS<br>📍 OKALA</div>
+                            <div class="shop-box">
+                                2 MAGASINS<br><br>
+                                📍 GLASS<br>
+                                📍 OKALA
+                            </div>
                         </div>
                     </div>
+
+                    <!-- TOP BAR -->
                     <div class="top-bar">
                         <div>📋 LISTE VALORISÉE</div>
                         <div>🛡️ ENGAGEMENTS</div>
                         <div>🎁 COUVERTURE GRATUITE</div>
                     </div>
+
+                    <!-- TITLE -->
                     <div class="title-section">
                         <div class="title-left">
-                            <div class="main-title">LISTE SCOLAIRE<br><span>VALORISÉE</span></div>
+                            <div class="main-title">
+                                LISTE SCOLAIRE<br>
+                                <span>VALORISÉE</span>
+                            </div>
                         </div>
                         <div class="class-box">
                             ${data.classe.toUpperCase()}<br>
                             <span style="font-size: 12px; font-weight: normal; color: #cbd5e1;">${schoolName.toUpperCase()}</span>
                         </div>
                     </div>
+
+                    <!-- CLIENT -->
                     <div class="client-box">
                         <div class="client-title">CLIENT</div>
                         <div class="client-grid">
@@ -1403,6 +1478,8 @@ async function openListDetails(id) {
                             <div>Observations : _______________________</div>
                         </div>
                     </div>
+
+                    <!-- TABLE -->
                     <div class="table-wrapper">
                         <table class="maquette-table">
                             <thead>
@@ -1421,10 +1498,14 @@ async function openListDetails(id) {
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- OCCASION -->
                     <div class="occase-row">
                         <div class="occase-box">📚 LIVRES SCOLAIRES D’OCCASION</div>
                         <div class="occase-box">🌱 Donnez une seconde vie aux livres</div>
                     </div>
+
+                    <!-- TOTAL (MAQUETTE MISE À JOUR AVEC UN SEUL SÉLECTEUR DE REMISE GLOBALE) -->
                     <div class="total-wrapper">
                         <div class="total-box" style="width: 440px; border-radius: 12px; overflow: hidden; border: 2px solid #d8def0;">
                             <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #001a70; color: white;">
@@ -1441,21 +1522,35 @@ async function openListDetails(id) {
                             </div>
                         </div>
                     </div>
+
+                    <!-- PAYMENT -->
                     <div class="payment-row">
-                        <div class="payment-box">MOYENS DE PAIEMENT ACCEPTÉS<br><br><div class="airtel">M4010</div></div>
-                        <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">PAIEMENT SÉCURISÉ<br>www.maisondelapressegabonairtel.com</div>
-                        <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">Conditions générales de ventes disponibles en magasin</div>
+                        <div class="payment-box">
+                            MOYENS DE PAIEMENT ACCEPTÉS<br><br>
+                            <div class="airtel">M4010</div>
+                        </div>
+                        <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">
+                            PAIEMENT SÉCURISÉ<br>
+                            www.maisondelapressegabonairtel.com
+                        </div>
+                        <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">
+                            Conditions générales de ventes disponibles en magasin
+                        </div>
                     </div>
+
+                    <!-- FOOTER -->
                     <div class="footer">
                         <div>La Maison de la Presse Gabon, partenaire privilégié de la réussite scolaire.</div>
                         <div>Ce document est une liste valorisée et non un devis.</div>
                     </div>
+
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="close-modal btn btn-secondary">Fermer</button>
             </div>
-        </div>`;
+        </div>
+        `;
         document.body.appendChild(overlay);
     } catch (error) {
         alert('❌ Erreur de chargement: ' + error.message);
@@ -1477,7 +1572,6 @@ async function openCreateListModal() {
 
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
-        overlay._abortController = new AbortController();
         overlay.innerHTML = `
             <div class="modal">
                 <div class="modal-header">
@@ -1511,7 +1605,8 @@ async function openCreateListModal() {
                     <button class="close-modal btn btn-secondary">Annuler</button>
                     <button class="btn btn-primary" id="submitNewListBtn">💾 Créer la liste</button>
                 </div>
-            </div>`;
+            </div>
+        `;
         document.body.appendChild(overlay);
 
         const classInput = overlay.querySelector('#classInput');
@@ -1539,7 +1634,9 @@ async function openCreateListModal() {
 
         classInput.addEventListener('input', updateSlugField);
         yearSelect.addEventListener('change', updateSlugField);
+        
         overlay.querySelector('#submitNewListBtn').addEventListener('click', () => saveNewList(schoolId));
+
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
     }
@@ -1568,12 +1665,14 @@ async function saveNewList(schoolId) {
                 slug: slug
             })
         });
+
         if (!res.ok) {
             const err = await res.json();
             throw new Error(err.detail || 'Erreur lors de la création');
         }
+
         alert('✅ Liste créée !');
-        closeModal(document.querySelector('.modal-overlay'));
+        document.querySelector('.modal-overlay').remove();
         loadSchoolsForLists();
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -1587,7 +1686,6 @@ async function openEditListModal(listId) {
 
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
-        overlay._abortController = new AbortController();
         overlay.innerHTML = `
             <div class="modal">
                 <div class="modal-header">
@@ -1610,7 +1708,8 @@ async function openEditListModal(listId) {
                     <button class="close-modal btn btn-secondary">Annuler</button>
                     <button class="btn btn-primary" id="updateListBtn">💾 Enregistrer</button>
                 </div>
-            </div>`;
+            </div>
+        `;
         document.body.appendChild(overlay);
         overlay.querySelector('#updateListBtn').addEventListener('click', () => updateList(listId));
     } catch (error) {
@@ -1633,9 +1732,11 @@ async function updateList(listId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ classe, titre })
         });
+
         if (!res.ok) throw new Error('Erreur de mise à jour');
+
         alert('✅ Liste mise à jour !');
-        closeModal(document.querySelector('.modal-overlay'));
+        document.querySelector('.modal-overlay').remove();
         loadSchoolsForLists();
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -1644,14 +1745,20 @@ async function updateList(listId) {
 
 async function openListItemsModal(listId) {
     try {
+        // 1. Charger les articles de la liste
         const itemsRes = await fetch(`${CONFIG.API_BASE}/school-list-items/${listId}`);
         const items = await itemsRes.json();
+
+        // 2. Charger le catalogue général pour la recherche et l'association des informations
         const productsRes = await fetch(`${CONFIG.API_BASE}/products`);
         const productsData = await productsRes.json();
         const products = productsData.items || [];
+
+        // 3. Charger les détails de l'école et de l'année scolaire de cette liste spécifique
         const listDetailsRes = await fetch(`${CONFIG.API_BASE}/school-lists/${listId}/details`);
         const listDetails = await listDetailsRes.json();
 
+        // Récupérer le nom de l'école de façon sécurisée
         const schoolName = document.getElementById('schoolSelect') 
             ? document.getElementById('schoolSelect').options[document.getElementById('schoolSelect').selectedIndex].text 
             : "Maison de la Presse Gabon";
@@ -1659,24 +1766,38 @@ async function openListItemsModal(listId) {
         let itemsHTML = '';
         let subtotal = 0;
 
+        // Générer le tableau HTML dynamique en utilisant la maquette physique de l'impression
         items.forEach((item, idx) => {
             const product = products.find(p => p.id === item.product_id);
             const price = item.prix_force !== null && item.prix_force !== undefined ? item.prix_force : (product ? product.prix_vente : 0);
             const rowTotal = price * item.quantite;
+
             subtotal += rowTotal;
 
             itemsHTML += `
                 <tr data-item-id="${item.id}" data-product-id="${item.product_id}">
-                    <td class="center"><div class="line-number">${idx + 1}</div></td>
-                    <td class="center"><img class="book-image" src="${product?.image_url || 'https://via.placeholder.com/90x120'}" onerror="this.src='https://via.placeholder.com/90x120'"></td>
-                    <td><strong style="color: #001a70; font-size: 15px;">${product ? product.titre : (item.designation_libre || 'N/A')}</strong></td>
-                    <td class="center" style="font-family: monospace; font-size: 14px;">${product ? product.code : 'N/A'}</td>
                     <td class="center">
+                        <div class="line-number">${idx + 1}</div>
+                    </td>
+                    <td class="center">
+                        <img class="book-image" src="${product?.image_url || 'https://via.placeholder.com/90x120'}" onerror="this.src='https://via.placeholder.com/90x120'">
+                    </td>
+                    <td>
+                        <strong style="color: #001a70; font-size: 15px;">${product ? product.titre : (item.designation_libre || 'N/A')}</strong>
+                    </td>
+                    <td class="center" style="font-family: monospace; font-size: 14px;">
+                        ${product ? product.code : 'N/A'}
+                    </td>
+                    <td class="center">
+                        <!-- Input interactif de quantité intégré dans la maquette -->
                         <input type="number" class="item-qty-input" value="${item.quantite}" min="1" style="width: 60px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px;">
                     </td>
                     <td class="center price">
+                        <!-- Input interactif de prix forcé intégré dans la maquette -->
                         <input type="number" class="item-price-input" value="${item.prix_force || ''}" placeholder="${product ? product.prix_vente : ''}" style="width: 100px; padding: 6px; text-align: center; font-weight: bold; border: 1.5px solid #d8def0; border-radius: 6px; color: #001a70; font-size: 15px;">
                         <span style="font-size: 10px; display: block; color: #666; margin-top: 2px;">FCFA (Unitaire)</span>
+                        
+                        <!-- Affichage dynamique du total de la ligne en fonction de la quantité -->
                         <div style="font-size: 13px; font-weight: bold; color: #001a70; margin-top: 5px; border-top: 1px dashed #cbd5e1; padding-top: 3px;">
                             Total: <span class="row-total-value">${rowTotal.toLocaleString('fr-FR')}</span> F
                         </div>
@@ -1684,16 +1805,18 @@ async function openListItemsModal(listId) {
                     <td class="center">
                         <button class="btn btn-danger btn-sm btn-delete-item-row" data-item-id="${item.id}" style="padding: 6px 12px; font-size: 12px; border-radius: 6px;">🗑️ Retirer</button>
                     </td>
-                </tr>`;
+                </tr>
+            `;
         });
 
+        // Calculs basés sur la remise unique de STATE
         const discountValue = Math.round(subtotal * (STATE.globalDiscount / 100));
         const totalTtc = subtotal - discountValue;
 
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay items-modal-overlay';
-        overlay._abortController = new AbortController();
         
+        // Structure de la modale intégrant la maquette valorisée physique complète
         overlay.innerHTML = `
             <div class="modal modal-fullscreen">
                 <div class="modal-header">
@@ -1701,6 +1824,8 @@ async function openListItemsModal(listId) {
                     <button class="close-modal">&times;</button>
                 </div>
                 <div class="modal-body" style="background:#eef2fb; padding: 25px;">
+                    
+                    <!-- ================= CONTRÔLE D'AJOUT (ZONE ADMIN) ================= -->
                     <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1200px; margin-left: auto; margin-right: auto; border: 1px solid #d8def0;">
                         <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #001a70; font-size: 15px;">🔍 Ajouter un produit à cette maquette :</label>
                         <div style="display: grid; grid-template-columns: 1fr 100px 140px 200px; gap: 12px;">
@@ -1712,6 +1837,8 @@ async function openListItemsModal(listId) {
                             <button class="btn btn-primary" id="addAndRefreshBtn" style="padding: 12px 20px; width: 100%;">➕ Ajouter</button>
                             <button class="btn btn-info" id="importPlatformBtn" style="padding: 12px 20px; width: 100%;">🔄 Importer Plateforme</button>
                         </div>
+                        
+                        <!-- ✅ SECTION INTERACTIVE : Configuration directe de la remise globale de cette liste (0% par défaut) -->
                         <div style="margin-top: 15px; padding-top: 15px; border-top: 1.5px dashed #cbd5e1; display: flex; gap: 20px; align-items: center;">
                             <span style="font-weight: bold; color: #001a70; font-size: 14px;">⚙️ Configuration de la remise globale :</span>
                             <div style="display: flex; align-items: center; gap: 8px;">
@@ -1720,9 +1847,14 @@ async function openListItemsModal(listId) {
                                 <span style="font-weight: bold; color: #001a70;">%</span>
                             </div>
                         </div>
+
                         <div id="selectedProductInfo" style="margin-top: 12px; padding: 10px; background: #e8f4f8; border-radius: 6px; display: none; border-left: 4px solid #3b82f6;"></div>
                     </div>
+
+                    <!-- ================= MAQUETTE PREVIEW PHYSIQUE ================= -->
                     <div class="page-list-details" style="width: 1200px; margin: auto; background: white; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.10); color: #111;">
+                        
+                        <!-- HEADER -->
                         <div class="header" style="display: flex; justify-content: space-between; padding: 25px 35px; border-bottom: 6px solid #001a70; background: white;">
                             <div class="logo-zone" style="display: flex; gap: 25px; align-items: center;">
                                 <div class="logo-text">
@@ -1732,30 +1864,55 @@ async function openListItemsModal(listId) {
                             </div>
                             <div class="contact-zone" style="display: flex; gap: 40px; align-items: flex-start;">
                                 <div class="contact-block" style="font-size: 14px; line-height: 1.8; color: #111;">
-                                    📞 011 72 21 31<br>📞 011 77 26 95<br>🟢 WhatsApp : 066 956 027<br>✉️ ipc369@yahoo.fr<br>🌐 www.maisondelapressegabon.com
+                                    📞 011 72 21 31<br>
+                                    📞 011 77 26 95<br>
+                                    🟢 WhatsApp : 066 956 027<br>
+                                    ✉️ ipc369@yahoo.fr<br>
+                                    🌐 www.maisondelapressegabon.com
                                 </div>
-                                <div class="shop-box" style="background: #001a70; color: white; padding: 15px 25px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: center;">2 MAGASINS<br><br>📍 GLASS<br>📍 OKALA</div>
+                                <div class="shop-box" style="background: #001a70; color: white; padding: 15px 25px; border-radius: 12px; font-size: 16px; font-weight: bold; text-align: center;">
+                                    2 MAGASINS<br><br>
+                                    📍 GLASS<br>
+                                    📍 OKALA
+                                </div>
                             </div>
                         </div>
+
+                        <!-- TOP BAR -->
                         <div class="top-bar" style="background: #001a70; color: white; display: flex; justify-content: space-around; padding: 15px 20px; font-size: 15px; font-weight: bold; border-radius: 0;">
-                            <div>📋 LISTE VALORISÉE</div><div>🛡️ ENGAGEMENTS</div><div>🎁 COUVERTURE GRATUITE</div>
+                            <div>📋 LISTE VALORISÉE</div>
+                            <div>🛡️ ENGAGEMENTS</div>
+                            <div>🎁 COUVERTURE GRATUITE</div>
                         </div>
+
+                        <!-- TITLE -->
                         <div class="title-section" style="display: flex; justify-content: space-between; align-items: center; padding: 30px 35px; background: white;">
                             <div class="title-left">
-                                <div class="main-title" style="font-size: 48px; line-height: 1.1; font-weight: bold; color: #001a70;">LISTE SCOLAIRE<br><span style="color: #f2b300;">VALORISÉE</span></div>
+                                <div class="main-title" style="font-size: 48px; line-height: 1.1; font-weight: bold; color: #001a70;">
+                                    LISTE SCOLAIRE<br>
+                                    <span style="color: #f2b300;">VALORISÉE</span>
+                                </div>
                             </div>
                             <div class="class-box" style="background: #001a70; color: white; padding: 18px 28px; border-radius: 12px; font-size: 18px; text-align: center; font-weight: bold; width: auto; min-width: 250px;">
                                 ${listDetails.classe.toUpperCase()}<br>
                                 <span style="font-size: 12px; font-weight: normal; color: #cbd5e1;">${schoolName.toUpperCase()}</span>
                             </div>
                         </div>
+
+                        <!-- CLIENT INFO -->
                         <div class="client-box" style="margin: 0 35px 20px 35px; border: 2px solid #d8def0; border-radius: 14px; padding: 18px; background: #f8fafc;">
-                            <div class="client-title" style="background: #001a70; color: white; display: inline-block; padding: 6px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; font-weight: bold;">CLIENT</div>
+                            <div class="client-title" style="background: #001a70; color: white; display: inline-block; padding: 6px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; font-weight: bold;">
+                                CLIENT
+                            </div>
                             <div class="client-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 13px; color: #333;">
-                                <div>Nom & prénom : _______________________</div><div>Tél (WhatsApp) : _______________________</div>
-                                <div>Classe : ${listDetails.classe}</div><div>Observations : _______________________</div>
+                                <div>Nom & prénom : _______________________</div>
+                                <div>Tél (WhatsApp) : _______________________</div>
+                                <div>Classe : ${listDetails.classe}</div>
+                                <div>Observations : _______________________</div>
                             </div>
                         </div>
+
+                        <!-- TABLE DE PREVIEW INTERACTIVE -->
                         <div class="table-wrapper" style="padding: 0 35px; background: white;">
                             <table class="maquette-table" style="width: 100%; border-collapse: collapse;">
                                 <thead style="background: #001a70; color: white;">
@@ -1774,43 +1931,68 @@ async function openListItemsModal(listId) {
                                 </tbody>
                             </table>
                         </div>
+
+                        <!-- OCCASION SECTION -->
                         <div class="occase-row" style="display: flex; gap: 15px; padding: 15px 35px; background: white;">
-                            <div class="occase-box" style="flex: 1; border: 2px solid #d8def0; border-radius: 12px; padding: 12px 18px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; color: #333;">📚 LIVRES SCOLAIRES D'OCCASION</div>
-                            <div class="occase-box" style="flex: 1; border: 2px solid #d8def0; border-radius: 12px; padding: 12px 18px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; color: #333;">🌱 Donnez une seconde vie aux livres</div>
+                            <div class="occase-box" style="flex: 1; border: 2px solid #d8def0; border-radius: 12px; padding: 12px 18px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; color: #333;">
+                                📚 LIVRES SCOLAIRES D'OCCASION
+                            </div>
+                            <div class="occase-box" style="flex: 1; border: 2px solid #d8def0; border-radius: 12px; padding: 12px 18px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; color: #333;">
+                                🌱 Donnez une seconde vie aux livres
+                            </div>
                         </div>
+
+                        <!-- TOTALS SECTION (LIVE PREVIEW COORDONNÉE) -->
                         <div class="total-wrapper" style="display: flex; justify-content: flex-end; padding: 20px 35px; background: white;">
+                            <!-- Zone de calculs dynamique de la remise unique variable -->
                             <div class="total-box" id="interactiveTotalBox" style="width: 440px; border-radius: 12px; overflow: hidden; border: 2px solid #d8def0;">
                                 <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #001a70; color: white;">
-                                    <span>TOTAL AVANT REMISE</span><span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
+                                    <span>TOTAL AVANT REMISE</span>
+                                    <span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                                    <span>REMISE GLOBALE ${STATE.globalDiscount}%</span><span>- ${discountValue.toLocaleString('fr-FR')} FCFA</span>
+                                    <span>REMISE GLOBALE ${STATE.globalDiscount}%</span>
+                                    <span>- ${discountValue.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
-                                    <span>TOTAL TTC FINAL</span><span>${totalTtc.toLocaleString('fr-FR')} FCFA</span>
+                                    <span>TOTAL TTC FINAL</span>
+                                    <span>${totalTtc.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- PAYMENT INFORMATION -->
                         <div class="payment-row" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 35px; gap: 15px; background: white; border-top: 1.5px dashed #e2e8f0;">
                             <div class="payment-box" style="flex: 1; border: 2px solid #d8def0; border-radius: 12px; padding: 12px; font-size: 12px; text-align: center; color: #333;">
-                                MOYENS DE PAIEMENT ACCEPTÉS<br><br><div class="airtel" style="color: red; font-size: 24px; font-weight: bold; margin-top: 5px;">M4010</div>
+                                MOYENS DE PAIEMENT ACCEPTÉS<br><br>
+                                <div class="airtel" style="color: red; font-size: 24px; font-weight: bold; margin-top: 5px;">M4010</div>
                             </div>
-                            <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">PAIEMENT SÉCURISÉ<br>www.maisondelapressegabonairtel.com</div>
-                            <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">Conditions générales de ventes disponibles en magasin</div>
+                            <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">
+                                PAIEMENT SÉCURISÉ<br>
+                                www.maisondelapressegabonairtel.com
+                            </div>
+                            <div class="payment-box" style="height: 90px; display: flex; align-items: center; justify-content: center;">
+                                Conditions générales de ventes disponibles en magasin
+                            </div>
                         </div>
+
+                        <!-- FOOTER -->
                         <div class="footer" style="background: #001a70; color: white; padding: 12px 35px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
                             <div>La Maison de la Presse Gabon, partenaire privilégié de la réussite scolaire.</div>
                             <div>Ce document est une liste valorisée et non un devis.</div>
                         </div>
+
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button class="close-modal btn btn-secondary">Fermer</button>
                     <button class="btn btn-primary" id="saveItemsListBtn">💾 Enregistrer la valorisation</button>
                 </div>
-            </div>`;
+            </div>
+        `;
         document.body.appendChild(overlay);
 
+        // --- GESTION DE LA RECHERCHE ET DES LISTENERS DANS LA MODALE ---
         const searchInput = overlay.querySelector('#productSearch');
         const searchResults = overlay.querySelector('#productSearchResults');
         const selectedInfo = overlay.querySelector('#selectedProductInfo');
@@ -1842,9 +2024,11 @@ async function openListItemsModal(listId) {
                         <small style="color: #64748b;">Code: ${p.code}</small>
                     </div>
                     <div style="font-weight: bold; color: #22c55e;">${p.prix_vente.toLocaleString('fr-FR')} F</div>
-                </div>`).join('');
+                </div>
+            `).join('');
             searchResults.style.display = 'block';
 
+            // Sélectionner un produit
             searchResults.querySelectorAll('.search-result-item').forEach(item => {
                 item.addEventListener('click', () => {
                     STATE.selectedProductIdFromSearch = item.dataset.id;
@@ -1856,21 +2040,25 @@ async function openListItemsModal(listId) {
             });
         });
 
-        // FIXED LEAK: Use registration with abortController signal so we cleanly unbind this global document click event when the modal takes down
-        registerModalListener(overlay, document, 'click', (e) => {
+        // Fermer les résultats si clic extérieur
+        document.addEventListener('click', (e) => {
             if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                 searchResults.style.display = 'none';
             }
         });
 
+        // ✅ RECALCUL DYNAMIQUE ET SÉLECTIF EN TEMPS RÉEL (Modifiable par l'utilisateur)
         const recalculateTotals = () => {
             let newSubtotal = 0;
             const rows = overlay.querySelectorAll('tbody tr');
+            
+            // Récupération de la remise globale saisie à la volée
             const listGlobalDiscountInput = overlay.querySelector('#listGlobalDiscount');
             const currentGlobalDiscount = listGlobalDiscountInput ? (parseFloat(listGlobalDiscountInput.value) || 0) : STATE.globalDiscount;
             
+            // Sauvegarde dans le STATE pour assurer la cohérence globale
             STATE.globalDiscount = currentGlobalDiscount;
-            saveShoppingList();
+            saveShoppingList(); // Persiste localement
             
             rows.forEach(row => {
                 const qtyInput = row.querySelector('.item-qty-input');
@@ -1883,6 +2071,8 @@ async function openListItemsModal(listId) {
                 const rowTotal = price * qty;
 
                 newSubtotal += rowTotal;
+
+                // Mettre à jour l'affichage du total de la ligne
                 if (rowTotalValue) {
                     rowTotalValue.textContent = rowTotal.toLocaleString('fr-FR');
                 }
@@ -1891,28 +2081,35 @@ async function openListItemsModal(listId) {
             const newDiscountValue = Math.round(newSubtotal * (currentGlobalDiscount / 100));
             const newTotalTtc = newSubtotal - newDiscountValue;
 
+            // Remplacer dynamiquement le contenu du panneau des totaux à l'écran
             const totalBox = overlay.querySelector('#interactiveTotalBox');
             if (totalBox) {
                 totalBox.innerHTML = `
                     <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #001a70; color: white;">
-                        <span>TOTAL AVANT REMISE</span><span>${newSubtotal.toLocaleString('fr-FR')} FCFA</span>
+                        <span>TOTAL AVANT REMISE</span>
+                        <span>${newSubtotal.toLocaleString('fr-FR')} FCFA</span>
                     </div>
                     <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                        <span>REMISE SÉLECTIVE ${currentGlobalDiscount}%</span><span>- ${newDiscountValue.toLocaleString('fr-FR')} FCFA</span>
+                        <span>REMISE SÉLECTIVE ${currentGlobalDiscount}%</span>
+                        <span>- ${newDiscountValue.toLocaleString('fr-FR')} FCFA</span>
                     </div>
                     <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
-                        <span>TOTAL TTC FINAL</span><span>${newTotalTtc.toLocaleString('fr-FR')} FCFA</span>
-                    </div>`;
+                        <span>TOTAL TTC FINAL</span>
+                        <span>${newTotalTtc.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                `;
             }
         };
 
-        // FIXED LEAK: Event tracking inside modal correctly cleaned up on disposal
+        // Écouter en temps réel les changements sur les quantités, prix et sur le taux de remise globale
         overlay.querySelectorAll('.item-qty-input, .item-price-input, #listGlobalDiscount').forEach(input => {
             input.addEventListener('input', recalculateTotals);
         });
 
+        // Événement d'ajout d'un produit
         overlay.querySelector('#addAndRefreshBtn').addEventListener('click', () => addProductToList(listId));
 
+        // Liaison avec le bouton d'importation depuis la plateforme
         overlay.querySelector('#importPlatformBtn').addEventListener('click', async () => {
             if (confirm("Voulez-vous extraire et injecter automatiquement les articles de cette classe depuis pages_libres.php ?")) {
                 try {
@@ -1924,8 +2121,8 @@ async function openListItemsModal(listId) {
                     if (!res.ok) throw new Error('Erreur réseau');
                     
                     alert("✅ Importation, appariement et valorisation réussis !");
-                    closeModal(overlay);
-                    openListItemsModal(listId);
+                    overlay.remove();
+                    openListItemsModal(listId); // Rafraîchit l'affichage maquette
                 } catch (e) {
                     alert("❌ Erreur : " + e.message);
                     const importBtn = overlay.querySelector('#importPlatformBtn');
@@ -1935,8 +2132,10 @@ async function openListItemsModal(listId) {
             }
         });
 
+        // Événement d'enregistrement des modifications de quantité ou de prix
         overlay.querySelector('#saveItemsListBtn').addEventListener('click', () => saveListItems(listId));
 
+        // Événement de suppression dynamique sur chaque ligne
         overlay.querySelectorAll('.btn-delete-item-row').forEach(btn => {
             btn.addEventListener('click', () => deleteListItem(btn.dataset.itemId, listId));
         });
@@ -1965,12 +2164,15 @@ async function addProductToList(listId) {
                 quantite: qty
             })
         });
+
         if (!res.ok) throw new Error('Erreur de serveur');
+
         alert('✅ Produit ajouté !');
         STATE.selectedProductIdFromSearch = null;
         
+        // Rafraîchir l'affichage de la modale directement (sans reload de page)
         const modal = document.querySelector('.items-modal-overlay');
-        if (modal) closeModal(modal);
+        if (modal) modal.remove();
         openListItemsModal(listId);
     } catch (error) {
         alert('❌ Erreur lors de l\'ajout : ' + error.message);
@@ -2004,8 +2206,8 @@ async function saveListItems(listId) {
     try {
         await Promise.all(updatePromises);
         alert('✅ Modifications enregistrées avec succès !');
-        closeModal(modal);
-        loadSchoolsForLists();
+        modal.remove();
+        loadSchoolsForLists(); // Recharge la liste principale en arrière-plan
     } catch (error) {
         alert('❌ Erreur lors de la sauvegarde : ' + error.message);
     }
@@ -2018,17 +2220,19 @@ async function deleteListItem(itemId, listId) {
             if (!res.ok) throw new Error('Erreur serveur');
             alert('✅ Article retiré de la liste !');
             
+            // Rafraîchit dynamiquement la vue des articles sans recharger toute la page
             const modal = document.querySelector('.items-modal-overlay');
-            if (modal) closeModal(modal);
+            if (modal) modal.remove();
             openListItemsModal(listId);
         } catch (error) {
-            alert('❌ Erreur lors de l\'suppression : ' + error.message);
+            alert('❌ Erreur lors de la suppression : ' + error.message);
         }
     }
 }
 
 async function generateListPDF(id) {
     try {
+        // Envoi de la remise globale en paramètre d'URL au serveur pour aligner le PDF généré
         const response = await fetch(`${CONFIG.API_BASE}/school-lists-pdf/${id}/pdf?discount_percent=${STATE.globalDiscount}`);
         if (!response.ok) throw new Error('Erreur de génération');
 
@@ -2038,7 +2242,7 @@ async function generateListPDF(id) {
         a.href = url;
         a.download = `liste_${id}.pdf`;
         a.click();
-        setTimeout(() => window.URL.revokeObjectURL(url), 1000); // Safe revocation delay
+        window.URL.revokeObjectURL(url);
     } catch (error) {
         alert('❌ Erreur de génération du PDF: ' + error.message);
     }
@@ -2050,7 +2254,7 @@ async function deleteList(id, schoolId, yearId) {
             const res = await fetch(`${CONFIG.API_BASE}/school-lists/${id}`, { method: 'DELETE' });
             if (!res.ok) throw new Error('Erreur serveur');
             alert('✅ Liste supprimée !');
-            loadClassesForLists(schoolId, yearId);
+            loadClassesForLists(schoolId, yearId); // Recharge les listes de la classe sélectionnée
         } catch (error) {
             alert('❌ Erreur: ' + error.message);
         }
