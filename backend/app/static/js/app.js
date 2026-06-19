@@ -1,4 +1,3 @@
-
 // ============= CONFIGURATION & ÉTAT GLOBAL =============
 const CONFIG = {
     // Utilise dynamiquement le domaine actuel (localhost en local, ou onrender en ligne)
@@ -27,6 +26,51 @@ function isBookProduct(code, type_produit) {
     if (type_produit === 1 || type_produit === 6 || type_produit === '1' || type_produit === '6') return true;
     if (code && (code.startsWith('978') || code.startsWith('979'))) return true;
     return false;
+}
+
+/**
+ * Compresse et redimensionne une image directement côté client avant envoi
+ * pour soulager la mémoire du backend FastAPI (limite 500 Mo Render)
+ */
+function compressAndResizeImage(file, maxWidth = 800, maxHeight = 800, quality = 0.75) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // Conservation du ratio d'aspect
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = Math.round((width * maxHeight) / height);
+                        height = maxHeight;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Export sous format JPEG compressé
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(compressedDataUrl);
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
 }
 
 // ============= INITIALISATION DE L'APPLICATION =============
@@ -437,15 +481,27 @@ function createEditModal(product) {
     const imagePreview = overlay.querySelector('#imagePreview');
     const imageUrlInput = overlay.querySelector('input[name="image_url"]');
     
-    imageInput.addEventListener('change', (e) => {
+    // Optimisation : compression et redimensionnement asynchrone côté client
+    imageInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                imagePreview.src = event.target.result;
-                imageUrlInput.value = event.target.result;
-            };
-            reader.readAsDataURL(file);
+            if (!file.type.startsWith('image/')) {
+                alert('⚠️ Veuillez sélectionner un fichier image valide.');
+                return;
+            }
+            try {
+                // Rétroaction visuelle pendant la compression
+                imagePreview.style.opacity = '0.5';
+                const compressedBase64 = await compressAndResizeImage(file, 800, 800, 0.75);
+                
+                imagePreview.src = compressedBase64;
+                imageUrlInput.value = compressedBase64;
+            } catch (err) {
+                console.error('Erreur lors du traitement de l\'image :', err);
+                alert('❌ Erreur lors de la compression de l\'image.');
+            } finally {
+                imagePreview.style.opacity = '1';
+            }
         }
     });
     
@@ -506,6 +562,11 @@ async function loadProducts() {
         if (!response.ok) throw new Error('Erreur lors du chargement des produits');
 
         const data = await response.json();
+        
+        // Optimisation mémoire : libération explicite de l'ancienne mémoire
+        STATE.allProducts = null;
+        STATE.filteredProducts = null;
+
         STATE.allProducts = data.items || [];
         STATE.filteredProducts = [...STATE.allProducts];
         STATE.currentPage = 1;
@@ -1351,6 +1412,8 @@ async function loadClassesForLists(schoolId, yearId) {
                             <button class="btn btn-info btn-sm btn-items-list" data-id="${list.id}">📝 Articles</button>
                             <button class="btn btn-warning btn-sm btn-pdf-list" data-id="${list.id}">📄 PDF</button>
                             <button class="btn btn-success btn-sm btn-edit-list" data-id="${list.id}">✏️ Modifier</button>
+                            <!-- NOUVEAU BOUTON DE DUPLICATION -->
+                            <button class="btn btn-secondary btn-sm btn-duplicate-list" data-id="${list.id}">📋 Dupliquer</button>
                             <button class="btn btn-danger btn-sm btn-delete-list" data-id="${list.id}">🗑️ Supprimer</button>
                         </div>
                     </div>
@@ -1364,6 +1427,13 @@ async function loadClassesForLists(schoolId, yearId) {
         classesContent.querySelectorAll('.btn-pdf-list').forEach(b => b.addEventListener('click', () => generateListPDF(b.dataset.id)));
         classesContent.querySelectorAll('.btn-edit-list').forEach(b => b.addEventListener('click', () => openEditListModal(b.dataset.id)));
         classesContent.querySelectorAll('.btn-delete-list').forEach(b => b.addEventListener('click', () => deleteList(b.dataset.id, schoolId, yearId)));
+        
+        // Liaison de l'événement de duplication
+        classesContent.querySelectorAll('.btn-duplicate-list').forEach(b => {
+            b.addEventListener('click', () => {
+                openDuplicateListModal(b.dataset.id, schoolId, yearId);
+            });
+        });
 
     } catch (error) {
         console.error(error);
@@ -2258,5 +2328,128 @@ async function deleteList(id, schoolId, yearId) {
         } catch (error) {
             alert('❌ Erreur: ' + error.message);
         }
+    }
+}
+
+
+async function openDuplicateListModal(listId, currentSchoolId, yearId) {
+    try {
+        // 1. Récupérer tous les établissements pour le sélecteur
+        const res = await fetch(`${CONFIG.API_BASE}/schools`);
+        const schools = await res.json();
+
+        // 2. Récupérer le libellé de l'année active depuis le select principal
+        const yearSelect = document.getElementById('yearSelectLists');
+        const yearLabel = yearSelect ? yearSelect.options[yearSelect.selectedIndex].text : '';
+
+        // 3. Créer la fenêtre modale interactive
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h2>📋 Dupliquer la liste scolaire</h2>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="duplicateForm">
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px;">Établissement cible :</label>
+                            <select id="dupSchoolId" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                                ${schools.map(s => `
+                                    <option value="${s.id}" ${parseInt(s.id) === parseInt(currentSchoolId) ? 'selected' : ''}>
+                                        ${s.nom}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px;">Nom de la nouvelle classe :</label>
+                            <input type="text" id="dupClasse" placeholder="Ex: 6ème B" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px;">Slug (Généré) :</label>
+                            <input type="text" id="dupSlug" readonly style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; background: #eef2f6;">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="close-modal btn btn-secondary">Annuler</button>
+                    <button class="btn btn-primary" id="confirmDuplicateBtn">💾 Lancer la copie</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const classInput = overlay.querySelector('#dupClasse');
+        const slugInput = overlay.querySelector('#dupSlug');
+
+        // Génération de slug en temps réel semblable au système existant
+        const updateSlugField = () => {
+            const classe = classInput.value.trim();
+            if (classe && yearLabel) {
+                slugInput.value = (classe + '-' + yearLabel)
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^\w\s-]/g, '')
+                    .replace(/\s+/g, '-')
+                    .replace(/-+/g, '-')
+                    .trim('-');
+            } else {
+                slugInput.value = '';
+            }
+        };
+
+        classInput.addEventListener('input', updateSlugField);
+
+        // Confirmation de l'action
+        overlay.querySelector('#confirmDuplicateBtn').addEventListener('click', () => {
+            const targetSchoolId = overlay.querySelector('#dupSchoolId').value;
+            const newClassName = classInput.value.trim();
+            const finalSlug = slugInput.value.trim();
+
+            if (!targetSchoolId || !newClassName || !finalSlug) {
+                alert('⚠️ Veuillez remplir tous les champs obligatoires.');
+                return;
+            }
+
+            submitDuplication(listId, targetSchoolId, newClassName, finalSlug, currentSchoolId, yearId);
+        });
+
+    } catch (error) {
+        alert('❌ Erreur lors de l\'initialisation : ' + error.message);
+    }
+}
+
+async function submitDuplication(listId, targetSchoolId, newClassName, slug, currentSchoolId, yearId) {
+    try {
+        const res = await fetch(`${CONFIG.API_BASE}/school-lists/${listId}/duplicate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                school_id: parseInt(targetSchoolId),
+                classe: newClassName,
+                slug: slug
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || 'Une erreur est survenue lors du traitement.');
+        }
+
+        alert('✅ Liste scolaire dupliquée avec succès !');
+
+        // Suppression de la modale d'affichage
+        const overlay = document.querySelector('.modal-overlay');
+        if (overlay) overlay.remove();
+
+        // Rechargement des listes de la vue en cours (école d'origine)
+        loadClassesForLists(currentSchoolId, yearId);
+
+    } catch (error) {
+        alert('❌ Échec de la copie : ' + error.message);
     }
 }

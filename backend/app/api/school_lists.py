@@ -209,3 +209,61 @@ async def import_list_from_platform(list_id: int):
     extractor = SchoolListExtractor(list_id=list_id)
     await extractor.extract_and_inject()
     return {"success": True, "message": "Extraction et valorisation terminées"}
+
+
+# Ajoutez cette importation de BaseModel de Pydantic si elle n'est pas déjà présente en haut de votre fichier
+from pydantic import BaseModel
+
+# Schéma Pydantic pour valider la requête de duplication
+class SchoolListDuplicateRequest(BaseModel):
+    school_id: int
+    classe: str
+    slug: str
+
+@router.post("/school-lists/{list_id}/duplicate", response_model=SchoolListResponse)
+def duplicate_school_list(
+    list_id: int, 
+    payload: SchoolListDuplicateRequest, 
+    db: Session = Depends(get_db)
+):
+    # 1. Rechercher la liste originale
+    original_list = db.query(SchoolList).filter(SchoolList.id == list_id).first()
+    if not original_list:
+        raise HTTPException(status_code=404, detail="Liste originale introuvable")
+
+    # 2. Vérifier si le nouveau slug existe déjà (pour éviter les erreurs d'unicité SQL)
+    existing_slug = db.query(SchoolList).filter(SchoolList.slug == payload.slug).first()
+    if existing_slug:
+        raise HTTPException(
+            status_code=400, 
+            detail="Ce slug est déjà associé à une autre liste. Veuillez modifier légèrement le nom de la classe."
+        )
+
+    # 3. Créer la nouvelle liste (dupliquée)
+    # L'année d'origine (year_id) est conservée, mais l'école (school_id) peut être identique ou différente
+    new_list = SchoolList(
+        school_id=payload.school_id,
+        year_id=original_list.year_id,
+        classe=payload.classe,
+        titre=payload.classe, # Par défaut, le titre reprend le nouveau nom de la classe
+        slug=payload.slug
+    )
+    db.add(new_list)
+    db.commit()
+    db.refresh(new_list)
+
+    # 4. Récupérer et copier les articles de la liste d'origine
+    original_items = db.query(SchoolListItem).filter(SchoolListItem.list_id == list_id).all()
+    for item in original_items:
+        new_item = SchoolListItem(
+            list_id=new_list.id,
+            product_id=item.product_id,
+            designation_libre=item.designation_libre,
+            quantite=item.quantite,
+            prix_force=item.prix_force
+        )
+        db.add(new_item)
+    
+    db.commit()
+    db.refresh(new_list)
+    return new_list
