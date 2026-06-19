@@ -29,7 +29,7 @@ state.json
 # ==========================================
 # BASES DE DONNÉES LOCALES (SQLite)
 # ==========================================
-*.db
+#*.db
 *.sqlite
 *.sqlite3
 
@@ -42,3 +42,6 @@ state.json
 .pydevproject
 .DS_Store
 Thumbs.db
+
+*.db-shm
+*.db-wal
