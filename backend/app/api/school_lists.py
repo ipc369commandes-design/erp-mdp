@@ -17,6 +17,7 @@ from app.schemas.school_year import SchoolYearCreate, SchoolYearResponse
 from app.schemas.school_list import SchoolListCreate, SchoolListResponse
 from app.schemas.school_list_item import SchoolListItemCreate, SchoolListItemResponse
 from app.services.extractor_service import SchoolListExtractor
+from sqlalchemy.exc import IntegrityError  
 
 router = APIRouter(
     tags=["School Lists"]
@@ -46,6 +47,7 @@ def create_school_year(year: SchoolYearCreate, db: Session = Depends(get_db)):
 def get_school_years(db: Session = Depends(get_db)):
     return db.query(SchoolYear).all()
 
+
 @router.post("/school-lists", response_model=SchoolListResponse)
 def create_school_list(school_list: SchoolListCreate, db: Session = Depends(get_db)):
     obj = SchoolList(
@@ -55,10 +57,17 @@ def create_school_list(school_list: SchoolListCreate, db: Session = Depends(get_
         titre=school_list.titre,
         slug=school_list.slug
     )
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return obj
+    try:
+        db.add(obj)
+        db.commit()
+        db.refresh(obj)
+        return obj
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Une liste de fournitures existe déjà avec ces critères pour cet établissement."
+        )
 
 @router.get("/school-lists", response_model=list[SchoolListResponse])
 def get_school_lists(db: Session = Depends(get_db)):

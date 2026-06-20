@@ -41,6 +41,8 @@ git init
 
 # Ajouter tous les fichiers de votre projet au suivi Git
 git add .
+pour forcer Git a suivre et à enregistrer les modif de la base de donnée
+git add -f data/erp.db
 
 # Enregistrer votre premier commit de sauvegarde
 git commit -m "Mise à jour base de donnees"
@@ -172,4 +174,28 @@ git add -f data/erp.db
 
 git commit -m "Forcer l'ajout de la base erp.db synchronisee"
 
+git push origin main
+
+# 1. Remontez à la racine si ce n'est pas déjà fait
+cd G:\ipc\erp_mdp_v1
+
+# 2. Forcez Git à ajouter le fichier avec son chemin complet depuis la racine
+git add -f backend/data/erp.db
+
+# 3. Vérifiez si Git l'a bien pris en compte
+git status
+
+# 4. Enregistrez et envoyez
+git commit -m "Forcer l'envoi de la base de donnees erp.db"
+git push origin main
+
+A LANCER SI MIS A JOUR BLOQUER DANS LES FICHIERS TEMPORAIRES
+
+python -c "import sqlite3; conn = sqlite3.connect('backend/data/erp.db'); conn.execute('PRAGMA wal_checkpoint(TRUNCATE);'); conn.close()"
+
+
+ENUITE:
+
+git add backend/data/erp.db
+git commit -m "Fusion du cache WAL et mise a jour de la base de donnees"
 git push origin main

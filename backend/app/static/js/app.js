@@ -1683,13 +1683,17 @@ async function openCreateListModal() {
         const yearSelect = overlay.querySelector('#yearSelect');
         const slugInput = overlay.querySelector('#slugInput');
 
+        // Génération de slug en temps réel unique par établissement cible
         const updateSlugField = () => {
             const classe = classInput.value.trim();
-            const selectedOption = yearSelect.options[yearSelect.selectedIndex];
-            const libelle = selectedOption ? selectedOption.getAttribute('data-libelle') || '' : '';
+            
+            // Récupérer dynamiquement le nom de l'établissement sélectionné dans la modale
+            const schoolSelect = overlay.querySelector('#dupSchoolId');
+            const schoolName = schoolSelect ? schoolSelect.options[schoolSelect.selectedIndex].text : '';
 
-            if (classe && libelle) {
-                slugInput.value = (classe + '-' + libelle)
+            if (classe && yearLabel && schoolName) {
+                const rawSlug = (schoolName + '-' + classe + '-' + yearLabel);
+                slugInput.value = rawSlug
                     .toLowerCase()
                     .normalize('NFD')
                     .replace(/[\u0300-\u036f]/g, '')
@@ -1703,9 +1707,10 @@ async function openCreateListModal() {
         };
 
         classInput.addEventListener('input', updateSlugField);
+
         yearSelect.addEventListener('change', updateSlugField);
-        
-        overlay.querySelector('#submitNewListBtn').addEventListener('click', () => saveNewList(schoolId));
+        // Recalculer le slug si l'utilisateur change d'établissement de destination
+        overlay.querySelector('#dupSchoolId').addEventListener('change', updateSlugField);
 
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -2387,8 +2392,17 @@ async function openDuplicateListModal(listId, currentSchoolId, yearId) {
         // Génération de slug en temps réel semblable au système existant
         const updateSlugField = () => {
             const classe = classInput.value.trim();
-            if (classe && yearLabel) {
-                slugInput.value = (classe + '-' + yearLabel)
+            const selectedOption = yearSelect.options[yearSelect.selectedIndex];
+            const libelle = selectedOption ? selectedOption.getAttribute('data-libelle') || '' : '';
+
+            // NOUVEAU : Récupérer le nom de l'école active pour rendre le slug unique par établissement
+            const schoolSelect = document.getElementById('schoolSelect');
+            const schoolName = schoolSelect ? schoolSelect.options[schoolSelect.selectedIndex].text : '';
+
+            if (classe && libelle && schoolName) {
+                // Le slug combinera désormais : nom-ecole + classe + annee
+                const rawSlug = (schoolName + '-' + classe + '-' + libelle);
+                slugInput.value = rawSlug
                     .toLowerCase()
                     .normalize('NFD')
                     .replace(/[\u0300-\u036f]/g, '')
