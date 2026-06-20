@@ -1686,13 +1686,15 @@ async function openCreateListModal() {
         // Génération de slug en temps réel unique par établissement cible
         const updateSlugField = () => {
             const classe = classInput.value.trim();
-            
-            // Récupérer dynamiquement le nom de l'établissement sélectionné dans la modale
-            const schoolSelect = overlay.querySelector('#dupSchoolId');
+            const selectedOption = yearSelect.options[yearSelect.selectedIndex];
+            const libelle = selectedOption ? selectedOption.getAttribute('data-libelle') || '' : '';
+
+            // Récupérer le nom de l'école sélectionnée dans la page d'origine
             const schoolName = schoolSelect ? schoolSelect.options[schoolSelect.selectedIndex].text : '';
 
-            if (classe && yearLabel && schoolName) {
-                const rawSlug = (schoolName + '-' + classe + '-' + yearLabel);
+            if (classe && libelle && schoolName) {
+                // Le slug combinera désormais : nom-ecole + classe + annee
+                const rawSlug = (schoolName + '-' + classe + '-' + libelle);
                 slugInput.value = rawSlug
                     .toLowerCase()
                     .normalize('NFD')
@@ -1707,10 +1709,9 @@ async function openCreateListModal() {
         };
 
         classInput.addEventListener('input', updateSlugField);
-
         yearSelect.addEventListener('change', updateSlugField);
-        // Recalculer le slug si l'utilisateur change d'établissement de destination
-        overlay.querySelector('#dupSchoolId').addEventListener('change', updateSlugField);
+        
+        overlay.querySelector('#submitNewListBtn').addEventListener('click', () => saveNewList(schoolId));
 
     } catch (error) {
         alert('❌ Erreur: ' + error.message);

@@ -45,7 +45,7 @@ pour forcer Git a suivre et à enregistrer les modif de la base de donnée
 git add -f data/erp.db
 
 # Enregistrer votre premier commit de sauvegarde
-git commit -m "Mise à jour base de donnees"
+git commit -m "Mise à jour "
 
 git rm -r --cached venv
 
