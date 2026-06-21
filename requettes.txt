@@ -11,6 +11,8 @@ python -m tests.check_metadata
 python -m tests.test_cache
 python -m tests.test_stats
 python -m tests.migrate_to_postgres
+python -m tests.migrate_contacts
+python -m tests.import_contacts_csv
 
 python -m tests.export_school_lists_to_excel
 
@@ -199,3 +201,5 @@ ENUITE:
 git add backend/data/erp.db
 git commit -m "Fusion du cache WAL et mise a jour de la base de donnees"
 git push origin main
+
+

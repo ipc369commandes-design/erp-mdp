@@ -15,7 +15,13 @@ const STATE = {
     schoolLists: [],
     selectedProductIdFromSearch: null,
     // Un seul taux de remise global (0% par défaut)
-    globalDiscount: 0
+    globalDiscount: 0,
+
+    // NOUVEL ÉTAT POUR LA PAGINATION DU RÉPERTOIRE
+    allContacts: [],
+    filteredContacts: [],
+    contactsCurrentPage: 1,
+    contactsPerPage: 24
 };
 
 // ============= FONCTIONS UTILITAIRES GLOBALES =============
@@ -86,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initProductEvents();
     initGlobalModals();
     initializeSyncSystem();
+    initContactEvents(); 
 
     // Premier chargement des données
     loadProducts();
@@ -976,6 +983,16 @@ function initNavigation() {
         const targetSection = document.getElementById('page-' + targetPage);
         if (targetSection) targetSection.classList.remove('hidden');
 
+        switch (targetPage) {
+         case 'contacts':
+             loadContacts();
+             break;
+         case 'lists':
+             loadSchoolsForLists();
+             break;
+
+        }
+    
         // Charger les données de la page correspondante
         switch (targetPage) {
             case 'lists':
@@ -987,6 +1004,7 @@ function initNavigation() {
             case 'years':
                 loadYears();
                 break;
+                
         }
     });
 
@@ -997,7 +1015,8 @@ function initNavigation() {
     }
 }
 
-// ============= ÉCOLES (SCHOOLS MODULE) =============
+
+    // ============= ÉCOLES (SCHOOLS MODULE) =============
 async function loadSchools() {
     const container = document.getElementById('schoolsContainer');
     if (!container) return;
@@ -2466,5 +2485,323 @@ async function submitDuplication(listId, targetSchoolId, newClassName, slug, cur
 
     } catch (error) {
         alert('❌ Échec de la copie : ' + error.message);
+    }
+}
+
+
+// ============= MODULE RÉPERTOIRE DE CONTACTS (PAGINÉ) =============
+
+async function loadContacts(query = '') {
+    const container = document.getElementById('contactsContainer');
+    const compteur = document.getElementById('contactsCompteur');
+    if (!container) return;
+
+    try {
+        const url = query ? `${CONFIG.API_BASE}/contacts?q=${encodeURIComponent(query)}` : `${CONFIG.API_BASE}/contacts`;
+        const res = await fetch(url);
+        
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || `Erreur serveur HTTP ${res.status}`);
+        }
+
+        const contacts = await res.json();
+        
+        if (!Array.isArray(contacts)) {
+            console.error("Format de données inattendu :", contacts);
+            throw new Error("L'API n'a pas renvoyé un tableau de contacts.");
+        }
+
+        // Mettre à jour l'état global des contacts
+        STATE.allContacts = contacts;
+        STATE.filteredContacts = [...contacts];
+        STATE.contactsCurrentPage = 1; // Réinitialiser à la première page à chaque recherche
+
+        displayContacts();
+    } catch (e) {
+        console.error('Erreur de chargement des contacts:', e);
+        container.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 40px; background: rgba(239,68,68,0.05); border-radius: 12px; border: 1px dashed rgba(239,68,68,0.2);">
+                <p style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">❌ Impossible de charger le répertoire</p>
+                <code style="font-family: monospace; font-size: 13px;">Détails : ${e.message}</code>
+            </div>
+        `;
+        if (compteur) compteur.textContent = "📊 Total : 0 contact(s)";
+        const paginationDiv = document.getElementById('contactsPagination');
+        if (paginationDiv) paginationDiv.innerHTML = '';
+    }
+}
+
+function displayContacts() {
+    const container = document.getElementById('contactsContainer');
+    const compteur = document.getElementById('contactsCompteur');
+    const paginationDiv = document.getElementById('contactsPagination');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    const contacts = STATE.filteredContacts;
+    if (compteur) {
+        compteur.textContent = `📊 Total : ${contacts.length} contact(s)`;
+    }
+
+    if (contacts.length === 0) {
+        container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Aucun contact trouvé</p>';
+        if (paginationDiv) paginationDiv.innerHTML = '';
+        return;
+    }
+
+    // Calculs de pagination
+    const totalPages = Math.ceil(contacts.length / STATE.contactsPerPage);
+    const startIndex = (STATE.contactsCurrentPage - 1) * STATE.contactsPerPage;
+    const endIndex = startIndex + STATE.contactsPerPage;
+    const pageContacts = contacts.slice(startIndex, endIndex);
+
+    pageContacts.forEach(contact => {
+        const card = createContactCard(contact);
+        container.appendChild(card);
+    });
+
+    displayContactsPagination(totalPages);
+}
+
+function displayContactsPagination(totalPages) {
+    const paginationDiv = document.getElementById('contactsPagination');
+    if (!paginationDiv) return;
+
+    paginationDiv.innerHTML = '';
+    if (totalPages <= 1) return;
+
+    // Bouton Précédent
+    if (STATE.contactsCurrentPage > 1) {
+        const prevBtn = document.createElement('button');
+        prevBtn.textContent = '←';
+        prevBtn.addEventListener('click', () => {
+            STATE.contactsCurrentPage--;
+            displayContacts();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        paginationDiv.appendChild(prevBtn);
+    }
+
+    // Gestion de l'affichage des pages condensé (ellipse)
+    const range = 2; // Nombre de pages autour de la page active
+    let startPage = Math.max(1, STATE.contactsCurrentPage - range);
+    let endPage = Math.min(totalPages, STATE.contactsCurrentPage + range);
+
+    if (startPage > 1) {
+        const firstBtn = document.createElement('button');
+        firstBtn.textContent = '1';
+        firstBtn.addEventListener('click', () => {
+            STATE.contactsCurrentPage = 1;
+            displayContacts();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        paginationDiv.appendChild(firstBtn);
+
+        if (startPage > 2) {
+            const dots = document.createElement('span');
+            dots.textContent = '...';
+            dots.className = 'pagination-dots';
+            dots.style.alignSelf = 'center';
+            dots.style.color = 'var(--text-muted)';
+            paginationDiv.appendChild(dots);
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.className = i === STATE.contactsCurrentPage ? 'active' : '';
+        btn.addEventListener('click', () => {
+            STATE.contactsCurrentPage = i;
+            displayContacts();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        paginationDiv.appendChild(btn);
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const dots = document.createElement('span');
+            dots.textContent = '...';
+            dots.className = 'pagination-dots';
+            dots.style.alignSelf = 'center';
+            dots.style.color = 'var(--text-muted)';
+            paginationDiv.appendChild(dots);
+        }
+
+        const lastBtn = document.createElement('button');
+        lastBtn.textContent = totalPages;
+        lastBtn.addEventListener('click', () => {
+            STATE.contactsCurrentPage = totalPages;
+            displayContacts();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        paginationDiv.appendChild(lastBtn);
+    }
+
+    // Bouton Suivant
+    if (STATE.contactsCurrentPage < totalPages) {
+        const nextBtn = document.createElement('button');
+        nextBtn.textContent = '→';
+        nextBtn.addEventListener('click', () => {
+            STATE.contactsCurrentPage++;
+            displayContacts();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        paginationDiv.appendChild(nextBtn);
+    }
+}
+
+function createContactCard(contact) {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    card.innerHTML = `
+        <h3 style="color: #60a5fa; margin-bottom: 8px;">👤 ${escapeHtml(contact.nom)}</h3>
+        <p style="font-family: monospace; font-size: 14px; margin-bottom: 15px;">📞 +${contact.contacts}</p>
+        <div class="card-actions" style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button class="btn btn-success btn-sm btn-whatsapp-contact" data-num="${contact.contacts}">📱 WhatsApp</button>
+            <button class="btn btn-info btn-sm btn-edit-contact" data-id="${contact.id}" data-nom="${escapeHtml(contact.nom)}" data-num="${contact.contacts}">✏️ Modifier</button>
+            <button class="btn btn-danger btn-sm btn-delete-contact" data-id="${contact.id}">🗑️ Supprimer</button>
+        </div>
+    `;
+
+    // Lancer la discussion WhatsApp
+    card.querySelector('.btn-whatsapp-contact').addEventListener('click', (e) => {
+        const num = e.target.dataset.num;
+        window.open(`https://wa.me/${num}`, '_blank');
+    });
+
+    // Basculer en mode modification
+    card.querySelector('.btn-edit-contact').addEventListener('click', (e) => {
+        const id = e.target.dataset.id;
+        const nom = e.target.dataset.nom;
+        const num = e.target.dataset.num;
+
+        document.getElementById('editContactId').value = id;
+        document.getElementById('contactNomInput').value = nom;
+        document.getElementById('contactTelInput').value = num;
+
+        document.getElementById('submitContactBtn').textContent = '✏️ Enregistrer';
+        document.getElementById('cancelEditContactBtn').classList.remove('hidden');
+    });
+
+    // Supprimer le contact
+    card.querySelector('.btn-delete-contact').addEventListener('click', () => {
+        deleteContact(contact.id);
+    });
+
+    return card;
+}
+
+async function saveOrUpdateContact() {
+    const idField = document.getElementById('editContactId').value;
+    const nom = document.getElementById('contactNomInput').value.trim();
+    const contacts = document.getElementById('contactTelInput').value.trim();
+
+    if (!nom || !contacts) {
+        alert('⚠️ Veuillez remplir tous les champs obligatoires.');
+        return;
+    }
+
+    try {
+        let res;
+        if (idField) {
+            // Modification
+            res = await fetch(`${CONFIG.API_BASE}/contacts/${idField}?nom=${encodeURIComponent(nom)}&contacts=${encodeURIComponent(contacts)}`, {
+                method: 'PUT'
+            });
+        } else {
+            // Création
+            res = await fetch(`${CONFIG.API_BASE}/contacts?nom=${encodeURIComponent(nom)}&contacts=${encodeURIComponent(contacts)}`, {
+                method: 'POST'
+            });
+        }
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Erreur lors de l\'enregistrement');
+
+        alert('✅ Contact enregistré avec succès !');
+        resetContactForm();
+        loadContacts();
+    } catch (e) {
+        alert('❌ Erreur : ' + e.message);
+    }
+}
+
+async function deleteContact(id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce contact ?')) {
+        try {
+            const res = await fetch(`${CONFIG.API_BASE}/contacts/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Erreur de suppression');
+            loadContacts();
+        } catch (e) {
+            alert('❌ Erreur : ' + e.message);
+        }
+    }
+}
+
+function resetContactForm() {
+    document.getElementById('editContactId').value = '';
+    document.getElementById('contactNomInput').value = '';
+    document.getElementById('contactTelInput').value = '';
+    document.getElementById('submitContactBtn').textContent = '➕ Ajouter';
+    document.getElementById('cancelEditContactBtn').classList.add('hidden');
+}
+
+function initContactEvents() {
+    const searchInput = document.getElementById('contactSearchInput');
+    const submitBtn = document.getElementById('submitContactBtn');
+    const cancelBtn = document.getElementById('cancelEditContactBtn');
+    const importBtn = document.getElementById('importContactsBtn');
+    const exportBtn = document.getElementById('exportContactsBtn');
+    const fileInput = document.getElementById('csvFileInput');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            loadContacts(e.target.value.trim());
+        });
+    }
+
+    if (submitBtn) {
+        submitBtn.addEventListener('click', saveOrUpdateContact);
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', resetContactForm);
+    }
+
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            window.location.href = `${CONFIG.API_BASE}/contacts/export`;
+        });
+    }
+
+    if (importBtn && fileInput) {
+        importBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(`${CONFIG.API_BASE}/contacts/import`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Erreur lors de l'import");
+
+                alert(`✅ Importation réussie !\n${data.added} contact(s) ajouté(s).\n${data.ignored} doublon(s) ou format(s) incorrect(s) ignoré(s).`);
+                fileInput.value = '';
+                loadContacts();
+            } catch (err) {
+                alert('❌ Erreur : ' + err.message);
+            }
+        });
     }
 }

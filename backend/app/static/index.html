@@ -37,11 +37,56 @@
             <button class="nav-btn" data-target="years">
                 📅 Années scolaires
             </button>
+
+            <button class="nav-btn" data-target="contacts">
+                📱 Répertoire
+            </button>
         </nav>
     </aside>
 
     <!-- ================= CONTENT ================= -->
     <main class="main-content">
+        <!-- ================= PAGE RÉPERTOIRE ================= -->
+        <section id="page-contacts" class="page hidden">
+
+            <div class="page-header">
+                <h1>📱 Répertoire de Contacts WhatsApp</h1>
+                <div>
+                    <button id="importContactsBtn" class="btn btn-info">📥 Importer CSV</button>
+                    <button id="exportContactsBtn" class="btn btn-warning">📤 Exporter CSV</button>
+                    <!-- Input invisible pour charger le fichier CSV -->
+                    <input type="file" id="csvFileInput" accept=".csv" class="hidden">
+                </div>
+            </div>
+
+            <!-- Formulaire d'ajout ou modification rapide -->
+            <div class="school-selector" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px;">
+                <input type="hidden" id="editContactId" value="">
+                <div style="flex: 1; min-width: 200px;">
+                    <label><strong>Nom complet :</strong></label>
+                    <input type="text" id="contactNomInput" placeholder="Ex: Jean-Marc" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: white;">
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <label><strong>Numéro de téléphone :</strong></label>
+                    <input type="text" id="contactTelInput" placeholder="Ex: 077448211 ou +241XXXXXXXXX" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: white;">
+                </div>
+                <button id="submitContactBtn" class="btn btn-primary" style="height: 44px; min-width: 140px;">➕ Ajouter</button>
+                <button id="cancelEditContactBtn" class="btn btn-secondary hidden" style="height: 44px;">Annuler</button>
+            </div>
+
+            <!-- Barre de recherche et compteur -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 15px; flex-wrap: wrap;">
+                <input type="text" id="contactSearchInput" placeholder="🔎 Rechercher par nom ou numéro..." class="search-input" style="max-width: 400px; width: 100%;">
+                <div id="contactsCompteur" class="stats-bar" style="margin: 0; min-width: 180px; text-align: center;">Total : 0 contact(s)</div>
+            </div>
+
+            <div class="page-body">
+                <div id="contactsContainer" class="cards-grid"></div>
+                <!-- NOUVEAU : Conteneur de la pagination des contacts -->
+                <div id="contactsPagination" class="pagination"></div>
+            </div>
+
+        </section>
 
         <!-- ================= PAGE PRODUITS ================= -->
         <section id="page-products" class="page active">

@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+
 
 from app.api.products import router as products_router
 from app.core.database import Base, engine
 from app.api import school_lists
+from app.api import contacts
 
 
 # Importer les modèles pour enregistrer les tables
@@ -13,6 +14,9 @@ from app.models.school import School
 from app.models.school_year import SchoolYear
 from app.models.school_list import SchoolList
 from app.models.school_list_item import SchoolListItem
+from app.models.contact import Contact  
+
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.api import products
@@ -21,6 +25,9 @@ from app.api import sync
 from app.api import school_lists_pdf
 from app.api import public_school_lists
 from app.api.shopping_list_pdf import router as shopping_pdf_router
+from fastapi import FastAPI
+
+
 
 import asyncio
 import sys
@@ -53,6 +60,7 @@ app.include_router(school_lists.router)
 app.include_router(school_lists_pdf.router)
 app.include_router(public_school_lists.router)
 app.include_router(shopping_pdf_router)
+app.include_router(contacts.router)
 
 @app.get("/")
 async def root():
