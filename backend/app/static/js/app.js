@@ -1,4 +1,5 @@
 
+
 // ============= CONFIGURATION & ÉTAT GLOBAL =============
 const CONFIG = {
     // Utilise dynamiquement le domaine actuel (localhost en local, ou onrender en ligne)
@@ -1730,8 +1731,9 @@ async function openCreateListModal() {
         };
 
         classInput.addEventListener('input', updateSlugField);
-
         yearSelect.addEventListener('change', updateSlugField);
+        
+        overlay.querySelector('#submitNewListBtn').addEventListener('click', () => saveNewList(schoolId));
 
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
@@ -2018,7 +2020,8 @@ async function openListItemsModal(listId) {
                                         <th style="padding: 12px 10px; font-size: 12px; text-align: left;">DÉSIGNATION</th>
                                         <th style="padding: 12px 10px; font-size: 12px;">ISBN / EAN</th>
                                         <th style="padding: 12px 10px; font-size: 12px;">QTÉ</th>
-                                        <th style="padding: 12px 10px; font-size: 12px;">PRIX DE VENTE</th>
+                                        <th style="padding: 12px 10px; font-size: 12px;">PRIX UNITAIRE</th>
+                                        <th style="padding: 12px 10px; font-size: 12px;">PRIX TOTAL</th>
                                         <th style="padding: 12px 10px; font-size: 12px;">ACTION</th>
                                     </tr>
                                 </thead>
@@ -2047,12 +2050,12 @@ async function openListItemsModal(listId) {
                                     <span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                                    <span>REMISE GLOBALE ${STATE.globalDiscount}%</span>
-                                    <span>- ${discountValue.toLocaleString('fr-FR')} FCFA</span>
+                                    <span>REMISE SÉLECTIVE ${currentGlobalDiscount}%</span>
+                                    <span>- ${newDiscountValue.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
                                     <span>TOTAL TTC FINAL</span>
-                                    <span>${totalTtc.toLocaleString('fr-FR')} FCFA</span>
+                                    <span>${newTotalTtc.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                             </div>
                         </div>
