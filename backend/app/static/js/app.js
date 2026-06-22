@@ -2050,12 +2050,12 @@ async function openListItemsModal(listId) {
                                     <span>${subtotal.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-yellow" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 14px; font-weight: bold; background: #fef08a; color: #854d0e;">
-                                    <span>REMISE SÉLECTIVE ${currentGlobalDiscount}%</span>
-                                    <span>- ${newDiscountValue.toLocaleString('fr-FR')} FCFA</span>
+                                    <span>REMISE SÉLECTIVE ${STATE.globalDiscount}%</span>
+                                    <span>- ${discountValue.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                                 <div class="total-line total-blue" style="display: flex; justify-content: space-between; padding: 12px 20px; font-size: 15px; font-weight: bold; background: #f2b300; color: #111;">
                                     <span>TOTAL TTC FINAL</span>
-                                    <span>${newTotalTtc.toLocaleString('fr-FR')} FCFA</span>
+                                    <span>${totalTtc.toLocaleString('fr-FR')} FCFA</span>
                                 </div>
                             </div>
                         </div>
@@ -2416,16 +2416,12 @@ async function openDuplicateListModal(listId, currentSchoolId, yearId) {
         // Génération de slug en temps réel semblable au système existant
         const updateSlugField = () => {
             const classe = classInput.value.trim();
-            const selectedOption = yearSelect.options[yearSelect.selectedIndex];
-            const libelle = selectedOption ? selectedOption.getAttribute('data-libelle') || '' : '';
 
-            // NOUVEAU : Récupérer le nom de l'école active pour rendre le slug unique par établissement
-            const schoolSelect = document.getElementById('schoolSelect');
-            const schoolName = schoolSelect ? schoolSelect.options[schoolSelect.selectedIndex].text : '';
-
-            if (classe && libelle && schoolName) {
+            if (classe && yearLabel) {
                 // Le slug combinera désormais : nom-ecole + classe + annee
-                const rawSlug = (schoolName + '-' + classe + '-' + libelle);
+                const schoolSelect = overlay.querySelector('#dupSchoolId');
+                const schoolName = schoolSelect ? schoolSelect.options[schoolSelect.selectedIndex].text : '';
+                const rawSlug = (schoolName + '-' + classe + '-' + yearLabel);
                 slugInput.value = rawSlug
                     .toLowerCase()
                     .normalize('NFD')
@@ -2440,6 +2436,7 @@ async function openDuplicateListModal(listId, currentSchoolId, yearId) {
         };
 
         classInput.addEventListener('input', updateSlugField);
+        overlay.querySelector('#dupSchoolId').addEventListener('change', updateSlugField);
 
         // Confirmation de l'action
         overlay.querySelector('#confirmDuplicateBtn').addEventListener('click', () => {
