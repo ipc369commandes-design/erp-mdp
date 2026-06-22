@@ -4,7 +4,8 @@ from app.api.products import router as products_router
 from app.core.database import Base, engine
 from app.api import school_lists
 from app.api import contacts
-
+import os
+from fastapi import Response
 
 # Importer les modèles pour enregistrer les tables
 from app.models.product import Product
@@ -26,7 +27,7 @@ from app.api import school_lists_pdf
 from app.api import public_school_lists
 from app.api.shopping_list_pdf import router as shopping_pdf_router
 from fastapi import FastAPI
-
+from fastapi.responses import FileResponse  
 
 
 import asyncio
@@ -61,6 +62,20 @@ app.include_router(school_lists_pdf.router)
 app.include_router(public_school_lists.router)
 app.include_router(shopping_pdf_router)
 app.include_router(contacts.router)
+
+
+
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    # Liste de chemins probables pour éviter de crasher si le dossier static n'est pas prêt
+    paths = [
+        "app/static/images/logo.png",
+        "app/static/logo.png",
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            return FileResponse(path)
+    return Response(status_code=204)  # Fallback propre p
 
 @app.get("/")
 async def root():
