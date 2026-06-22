@@ -292,7 +292,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
         elements.append(Spacer(1, 0.15*cm))
         
         # ============= PRODUCTS TABLE =============
-        # ✅ TYPE ANNOTATION POUR CORRIGER PYLANCE
+        # ✅ FIX : Colonne Code Barre retirée, colonne Prix Unitaire ajoutée.
         table_data: List[List[Any]] = [
             [
                 Paragraph("<b>N°</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
@@ -300,8 +300,8 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 Paragraph("<b>DÉSIGNATION</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
                 Paragraph("<b>ISBN</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
                 Paragraph("<b>QTÉ</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
-                Paragraph("<b>PRIX</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
-                Paragraph("<b>CODE BARRE</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9))
+                Paragraph("<b>PRIX UNIT.</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
+                Paragraph("<b>PRIX TOTAL</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9))
             ]
         ]
         
@@ -312,8 +312,8 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
         style_cart_titre = ParagraphStyle('cart_titre', parent=styles['Normal'], fontSize=8, alignment=TA_LEFT, leading=9)
         style_cart_isbn = ParagraphStyle('cart_isbn', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)
         style_cart_qty = ParagraphStyle('cart_qty', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)
+        style_cart_unit_prix = ParagraphStyle('cart_unit_prix', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#475569'), fontName='Helvetica')
         style_cart_prix = ParagraphStyle('cart_prix', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#001a70'), fontName='Helvetica-Bold')
-        style_cart_code = ParagraphStyle('cart_code', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER, fontName='Courier', leading=8)
         
         for idx, item in enumerate(request.items, 1):
             prix = item.prix_vente
@@ -353,17 +353,18 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 Paragraph(item.titre[:40] + "..." if len(item.titre) > 40 else item.titre, style_cart_titre),
                 Paragraph(item.code, style_cart_isbn),
                 Paragraph(str(item.qty), style_cart_qty),
-                Paragraph(f"<b>{float(prix):,.0f}</b>", style_cart_prix),
-                Paragraph(item.code, style_cart_code)
+                Paragraph(f"{float(prix):,.0f}", style_cart_unit_prix),
+                Paragraph(f"<b>{item_total:,.0f}</b>", style_cart_prix)
             ])
         
         if len(table_data) == 1:
             elements.append(Paragraph("Aucun article dans cette liste", styles['Normal']))
         else:
+            # colWidths réajusté pour conserver la largeur totale de 20.0 cm
             table = Table(
                 table_data,
                 repeatRows=1,
-                colWidths=[1.0*cm, 1.5*cm, 10.5*cm, 2.5*cm, 1.0*cm, 2.0*cm, 1.5*cm]
+                colWidths=[1.0*cm, 1.5*cm, 10.0*cm, 2.5*cm, 1.0*cm, 2.0*cm, 2.0*cm]
             )
             
             table_style_list = [
@@ -381,7 +382,7 @@ def generate_pdf_from_cart(request: GeneratePDFRequest):
                 ('ALIGN', (3, 1), (3, -1), 'CENTER'),
                 ('ALIGN', (4, 1), (4, -1), 'CENTER'),
                 ('ALIGN', (5, 1), (5, -1), 'RIGHT'),
-                ('ALIGN', (6, 1), (6, -1), 'CENTER'),
+                ('ALIGN', (6, 1), (6, -1), 'RIGHT'),  # Prix Total aligné à DROITE
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
                 ('PADDING', (0, 1), (-1, -1), 2),
@@ -792,8 +793,8 @@ def generate_school_list_pdf(
                 Paragraph("<b>DÉSIGNATION</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
                 Paragraph("<b>ISBN/EAN</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
                 Paragraph("<b>QTÉ</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
-                Paragraph("<b>PRIX</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
-                Paragraph("<b>CODE BARRE</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9))
+                Paragraph("<b>PRIX UNIT.</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9)),
+                Paragraph("<b>PRIX TOTAL</b>", ParagraphStyle('TH', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=colors.white, leading=9))
             ]
         ]
         
@@ -804,8 +805,8 @@ def generate_school_list_pdf(
         style_list_titre = ParagraphStyle('list_titre', parent=styles['Normal'], fontSize=8, alignment=TA_LEFT, leading=9)
         style_list_isbn = ParagraphStyle('list_isbn', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)
         style_list_qty = ParagraphStyle('list_qty', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, leading=9)
+        style_list_unit_prix = ParagraphStyle('list_unit_prix', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#475569'), fontName='Helvetica')
         style_list_prix = ParagraphStyle('list_prix', parent=styles['Normal'], fontSize=8, alignment=TA_RIGHT, leading=9, textColor=colors.HexColor('#001a70'), fontName='Helvetica-Bold')
-        style_list_code = ParagraphStyle('list_code', parent=styles['Normal'], fontSize=7, alignment=TA_CENTER, fontName='Courier', leading=8)
         
         for idx, (item, product) in enumerate(items_with_products, 1):
             prix = item.prix_force if item.prix_force else product.prix_vente
@@ -846,8 +847,8 @@ def generate_school_list_pdf(
                 Paragraph(product.titre[:40] + "..." if len(product.titre) > 40 else product.titre, style_list_titre),
                 Paragraph(product.code, style_list_isbn),
                 Paragraph(str(item.quantite), style_list_qty),
-                Paragraph(f"<b>{format_currency(item_total)}</b>", style_list_prix),
-                Paragraph(product.code, style_list_code)
+                Paragraph(f"{float(prix):,.0f}", style_list_unit_prix),
+                Paragraph(f"<b>{format_currency(item_total)}</b>", style_list_prix)
             ])
         
         if len(table_data) == 1:
@@ -856,7 +857,7 @@ def generate_school_list_pdf(
             table = Table(
                 table_data,
                 repeatRows=1,
-                colWidths=[1.0*cm, 1.5*cm, 10.5*cm, 2.5*cm, 1.0*cm, 2.0*cm, 1.5*cm]
+                colWidths=[1.0*cm, 1.5*cm, 10.0*cm, 2.5*cm, 1.0*cm, 2.0*cm, 2.0*cm]
             )
             
             table_style_list = [
@@ -874,7 +875,7 @@ def generate_school_list_pdf(
                 ('ALIGN', (3, 1), (3, -1), 'CENTER'),
                 ('ALIGN', (4, 1), (4, -1), 'CENTER'),
                 ('ALIGN', (5, 1), (5, -1), 'RIGHT'),
-                ('ALIGN', (6, 1), (6, -1), 'CENTER'),
+                ('ALIGN', (6, 1), (6, -1), 'RIGHT'),  # Prix Total aligné à DROITE
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
                 ('PADDING', (0, 1), (-1, -1), 2),
@@ -917,7 +918,6 @@ def generate_school_list_pdf(
             elements.append(Spacer(1, 0.15*cm))
             
             # ============= TOTALS SECTION (DYNAMIQUE) =============
-            # ✅ RECALCUL DYNAMIQUE : Réception et application du pourcentage choisi (0% par défaut)
             pct = discount_percent if discount_percent is not None else 0.0
             discount = int(round(subtotal * (pct / 100.0)))
             final_total = subtotal - discount
@@ -1003,7 +1003,7 @@ def generate_school_list_pdf(
             ]
         ]
         
-        footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm, 10.0*cm])
+        footer_table = Table(footer_data, colWidths=[10.0*cm, 10.0*cm], rowHeights=[0.55*cm])
         footer_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#001a70')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),

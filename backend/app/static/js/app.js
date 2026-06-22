@@ -1,3 +1,4 @@
+
 // ============= CONFIGURATION & ÉTAT GLOBAL =============
 const CONFIG = {
     // Utilise dynamiquement le domaine actuel (localhost en local, ou onrender en ligne)
@@ -92,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initProductEvents();
     initGlobalModals();
     initializeSyncSystem();
-    initContactEvents(); 
+    initContactEvents();
 
     // Premier chargement des données
     loadProducts();
@@ -1477,7 +1478,8 @@ async function openListDetails(id) {
         let itemsHTML = '';
 
         (data.items || []).forEach((item, idx) => {
-            const itemTotal = (item.prix_unitaire || 0) * (item.quantite || 1); // ✅ Calcul du total de la ligne
+            const unitPrice = item.prix_unitaire || 0;
+            const itemTotal = unitPrice * (item.quantite || 1); // ✅ Calcul du total de la ligne
             subtotal += itemTotal;
 
             itemsHTML += `
@@ -1491,8 +1493,8 @@ async function openListDetails(id) {
                 </td>
                 <td class="center" style="font-family: monospace; font-size: 14px;">${item.code || 'N/A'}</td>
                 <td class="center">${item.quantite || 1}</td>
+                <td class="center price" style="font-size: 14px; color: #475569;">${unitPrice.toLocaleString('fr-FR')}</td>
                 <td class="center price">${itemTotal.toLocaleString('fr-FR')}</td>
-                <td class="center barcode">${item.code || 'N/A'}</td>
             </tr>
             `;
         });
@@ -1578,8 +1580,8 @@ async function openListDetails(id) {
                                     <th style="text-align: left;">DÉSIGNATION</th>
                                     <th>ISBN / EAN</th>
                                     <th>QTÉ</th>
-                                    <th>PRIX DE VENTE</th>
-                                    <th>CODE BARRE</th>
+                                    <th>PRIX UNITAIRE</th>
+                                    <th>PRIX TOTAL</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1728,9 +1730,8 @@ async function openCreateListModal() {
         };
 
         classInput.addEventListener('input', updateSlugField);
+
         yearSelect.addEventListener('change', updateSlugField);
-        
-        overlay.querySelector('#submitNewListBtn').addEventListener('click', () => saveNewList(schoolId));
 
     } catch (error) {
         alert('❌ Erreur: ' + error.message);
